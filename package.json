@@ -8,6 +8,7 @@
     "css:build": "tailwindcss -i styles/input.css -o site/assets/app.css --minify",
     "vendor": "mkdir -p site/vendor && cp node_modules/hls.js/dist/hls.min.js site/vendor/hls.min.js",
     "setup": "npm run vendor && npm run css",
+    "setup:prod": "npm run vendor && npm run css:build",
     "dev": "python3 -m http.server 5500 --directory site"
   },
   "devDependencies": {
