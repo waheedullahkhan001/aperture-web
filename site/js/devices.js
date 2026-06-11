@@ -45,16 +45,28 @@ onSubmit(document.querySelector('#add-form'), async (fd) => {
 });
 
 document.querySelector('#copy-token').addEventListener('click', async () => {
-  await navigator.clipboard.writeText(tokenValue.value);
-  toast('Token copied to clipboard', 'success');
+  try {
+    await navigator.clipboard.writeText(tokenValue.value);
+    toast('Token copied to clipboard', 'success');
+  } catch {
+    // Clipboard can be blocked (permissions, insecure context) — never fail silently
+    // on a shown-once secret. Select the text so a manual copy still works.
+    tokenValue.select();
+    toast('Could not copy automatically — token selected, press Ctrl+C', 'warning');
+  }
 });
+
+// The token cannot be retrieved again: block ESC so it can only be dismissed via
+// the Done button, and wipe the plaintext from the DOM once the dialog closes.
+tokenDialog.addEventListener('cancel', (e) => e.preventDefault());
+tokenDialog.addEventListener('close', () => { tokenValue.value = ''; });
 
 rows.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-revoke]');
   if (!btn) return;
   const id = btn.dataset.revoke;
   const name = devices.find((d) => d.id === id)?.name ?? 'this device';
-  if (!await confirmDialog(`Revoke "${name}"? The device can no longer stream or reach the server until paired again.`, 'Revoke')) return;
+  if (!await confirmDialog(`Revoke "${name}"? The device will be signed out immediately and must be paired again to resume streaming.`, 'Revoke')) return;
   try {
     await api.del(`/api/v1/me/devices/${id}`);
     toast('Device revoked', 'success');
