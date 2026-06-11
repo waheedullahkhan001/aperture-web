@@ -63,16 +63,22 @@ sessionsEl.addEventListener('click', async (e) => {
   }
 });
 
-document.querySelector('#delete-account').addEventListener('click', async () => {
-  if (!await confirmDialog(
-    'Permanently delete your account and ALL data — profile, devices, contacts and every recording on the server? This cannot be undone.',
-    'Delete my account')) return;
+document.querySelector('#delete-account').addEventListener('click', async (e) => {
+  // Deliberately the browser's native prompt: typing DELETE is stronger friction
+  // than a click-through for an action that wipes every recording on the server.
+  const typed = prompt(
+    'This permanently deletes your account and ALL data — profile, devices, contacts '
+    + 'and every recording on the server. It cannot be undone.\n\nType DELETE to confirm:');
+  if (typed !== 'DELETE') return;
+  const btn = e.currentTarget;
+  btn.disabled = true;
   try {
     await api.del('/api/v1/me');
     tokens.clear();
     location.replace('index.html');
   } catch (err) {
     showApiError(err);
+    btn.disabled = false; // only re-enable on failure — on success we navigate away
   }
 });
 
