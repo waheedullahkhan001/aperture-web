@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recordings — Aperture</title>
+  <link rel="stylesheet" href="assets/app.css">
+</head>
+<body class="min-h-screen bg-base-200">
+  <header data-nav></header>
+  <main class="mx-auto max-w-5xl p-4 space-y-4">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <h1 class="text-2xl font-bold">Recordings</h1>
+      <select id="status-filter" class="select w-44">
+        <option value="">All statuses</option>
+        <option value="PENDING">Pending</option>
+        <option value="RECORDING">Recording</option>
+        <option value="ENDED">Ended</option>
+        <option value="FAILED">Failed</option>
+      </select>
+    </div>
+
+    <div class="card bg-base-100 shadow">
+      <div class="card-body p-0">
+        <table class="table">
+          <thead>
+            <tr><th>Started</th><th>Ended</th><th>Status</th><th>Alerts sent</th><th></th></tr>
+          </thead>
+          <tbody id="rows">
+            <tr><td colspan="5" class="text-center p-6"><span class="loading loading-spinner"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-center gap-2">
+      <button id="prev" class="join-item btn btn-sm">«</button>
+      <span id="page-info" class="text-sm"></span>
+      <button id="next" class="join-item btn btn-sm">»</button>
+    </div>
+  </main>
+  <script type="module" src="js/recordings.js"></script>
+</body>
+</html>
