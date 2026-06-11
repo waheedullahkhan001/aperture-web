@@ -23,6 +23,11 @@ async function load() {
   try {
     const data = await api.get(`/api/v1/recordings?${params}`);
     totalPages = Math.max(data.totalPages, 1);
+    // After deleting the last row of the last page we can be past the end — rewind.
+    if (page >= totalPages && page > 0) {
+      page = totalPages - 1;
+      return load();
+    }
     pageInfo.textContent = `Page ${data.page + 1} of ${totalPages} (${data.totalElements} total)`;
     if (!data.content.length) {
       rows.innerHTML = `<tr><td colspan="5" class="text-center p-6 opacity-70">
@@ -46,8 +51,9 @@ async function load() {
 }
 
 rows.addEventListener('click', async (e) => {
-  const id = e.target.dataset?.delete;
-  if (!id) return;
+  const btn = e.target.closest('[data-delete]');
+  if (!btn) return;
+  const id = btn.dataset.delete;
   if (!await confirmDialog('Delete this recording and all its video files from the server? This cannot be undone.', 'Delete')) return;
   try {
     await api.del(`/api/v1/recordings/${id}`);
