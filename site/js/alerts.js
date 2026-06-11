@@ -12,6 +12,7 @@ async function load() {
     form.elements.countdownDurationSeconds.value = config.countdownDurationSeconds;
     form.elements.messageTemplate.value = config.messageTemplate;
   } catch (err) {
+    form.inert = true; // never let a half-loaded form overwrite the real config
     showApiError(err);
   }
 }
