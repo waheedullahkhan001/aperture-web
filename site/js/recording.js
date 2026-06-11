@@ -65,6 +65,8 @@ async function load() {
       </tr>`).join('')
       : '<tr><td colspan="5" class="text-center p-6 opacity-70">No location samples.</td></tr>';
   } catch (err) {
+    info.innerHTML = `<p class="text-error">${err.status === 404 ? 'Recording not found.' : 'Failed to load this recording.'}
+      <a class="link" href="recordings.html">Back to recordings</a></p>`;
     showApiError(err);
   }
 }
@@ -75,24 +77,31 @@ async function segmentUrl(n) {
   return api.blobUrl(`/api/v1/recordings/${id}/segments/${n}/download`);
 }
 
+let busy = false; // one segment fetch at a time keeps memory bounded and blocks double-clicks
+
 document.querySelector('main').addEventListener('click', async (e) => {
   const playBtn = e.target.closest('[data-play]');
   const dlBtn = e.target.closest('[data-download]');
+  const btn = playBtn ?? dlBtn;
+  if (!btn || busy) return;
+  busy = true;
+  const original = btn.textContent;
+  btn.textContent = 'Loading…';
+  btn.setAttribute('disabled', '');
   try {
     if (playBtn) {
       const n = playBtn.dataset.play;
-      playBtn.classList.add('btn-disabled');
-      if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
-      currentBlobUrl = await segmentUrl(n);
+      const newUrl = await segmentUrl(n);
       playerTitle.textContent = `Playback — segment ${n}`;
       playerCard.classList.remove('hidden');
-      player.src = currentBlobUrl;
+      player.src = newUrl;
       player.play();
-      playBtn.classList.remove('btn-disabled');
+      // Revoke the previous URL only after the player switched to the new one.
+      if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
+      currentBlobUrl = newUrl;
       playerCard.scrollIntoView({ behavior: 'smooth' });
-    } else if (dlBtn) {
+    } else {
       const n = dlBtn.dataset.download;
-      dlBtn.classList.add('btn-disabled');
       const url = await segmentUrl(n);
       const a = document.createElement('a');
       a.href = url;
@@ -101,12 +110,13 @@ document.querySelector('main').addEventListener('click', async (e) => {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10_000); // give the download time to start
-      dlBtn.classList.remove('btn-disabled');
     }
   } catch (err) {
-    playBtn?.classList.remove('btn-disabled');
-    dlBtn?.classList.remove('btn-disabled');
     showApiError(err);
+  } finally {
+    btn.textContent = original;
+    btn.removeAttribute('disabled');
+    busy = false;
   }
 });
 
