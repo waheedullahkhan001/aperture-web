@@ -97,7 +97,9 @@ document.querySelector('main').addEventListener('click', async (e) => {
       const a = document.createElement('a');
       a.href = url;
       a.download = `recording-${id}-segment-${n}.mp4`;
+      document.body.appendChild(a); // detached-anchor clicks are unreliable in some browsers
       a.click();
+      a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10_000); // give the download time to start
       dlBtn.classList.remove('btn-disabled');
     }
