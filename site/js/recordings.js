@@ -1,15 +1,8 @@
 import { api, requireAuth } from './api.js';
-import { esc, fmtDateTime, toast, confirmDialog, showApiError } from './ui.js';
+import { esc, fmtDateTime, toast, confirmDialog, showApiError, STATUS_BADGE } from './ui.js';
 import './nav.js';
 
 requireAuth();
-
-const STATUS_BADGE = {
-  PENDING: 'badge-warning',
-  RECORDING: 'badge-error animate-pulse',
-  ENDED: 'badge-ghost',
-  FAILED: 'badge-error badge-outline',
-};
 
 const rows = document.querySelector('#rows');
 const pageInfo = document.querySelector('#page-info');

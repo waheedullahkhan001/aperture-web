@@ -60,6 +60,15 @@ export function fmtBytes(bytes) {
   return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
+// Recording status → daisyUI badge classes. Shared by the recordings list,
+// the recording detail page and the public watch page so they can never drift.
+export const STATUS_BADGE = {
+  PENDING: 'badge-warning',
+  RECORDING: 'badge-error animate-pulse',
+  ENDED: 'badge-ghost',
+  FAILED: 'badge-error badge-outline',
+};
+
 // Shows an ApiError: highlights invalid fields on the form (if given) and toasts the message.
 export function showApiError(err, form = null) {
   if (form && err.fieldErrors?.length) {

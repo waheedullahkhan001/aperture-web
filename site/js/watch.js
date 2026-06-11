@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { esc, fmtDateTime } from './ui.js';
+import { esc, fmtDateTime, STATUS_BADGE } from './ui.js';
 import { playWhep } from './whep.js';
 
 // Accept both URL shapes:
@@ -17,13 +17,6 @@ const ownerEl = document.querySelector('#owner');
 const metaEl = document.querySelector('#meta');
 const messageEl = document.querySelector('#message');
 const player = document.querySelector('#player');
-
-const STATUS_BADGE = {
-  PENDING: 'badge-warning',
-  RECORDING: 'badge-error animate-pulse',
-  ENDED: 'badge-ghost',
-  FAILED: 'badge-error badge-outline',
-};
 
 let pc = null;           // active WebRTC connection, if any
 let hlsInstance = null;  // active hls.js instance, if any

@@ -1,18 +1,11 @@
 import { api, requireAuth } from './api.js';
-import { esc, fmtDateTime, fmtBytes, toast, confirmDialog, showApiError } from './ui.js';
+import { esc, fmtDateTime, fmtBytes, toast, confirmDialog, showApiError, STATUS_BADGE } from './ui.js';
 import './nav.js';
 
 requireAuth();
 
 const id = new URLSearchParams(location.search).get('id');
 if (!id) location.replace('recordings.html');
-
-const STATUS_BADGE = {
-  PENDING: 'badge-warning',
-  RECORDING: 'badge-error animate-pulse',
-  ENDED: 'badge-ghost',
-  FAILED: 'badge-error badge-outline',
-};
 
 const info = document.querySelector('#info');
 const segmentsEl = document.querySelector('#segments');
@@ -52,22 +45,28 @@ async function load() {
       </tr>`).join('')
       : '<tr><td colspan="5" class="text-center p-6 opacity-70">No video segments stored on the server yet.</td></tr>';
 
-    samplesEl.innerHTML = recentSamples.length ? recentSamples.map((m) => `
+    samplesEl.innerHTML = recentSamples.length ? recentSamples.map((m) => {
+      // Coerce coordinates to real numbers — they feed an href, so never trust raw values.
+      const lat = parseFloat(m.latitude);
+      const lon = parseFloat(m.longitude);
+      const hasCoords = !Number.isNaN(lat) && !Number.isNaN(lon);
+      return `
       <tr>
         <td>${fmtDateTime(m.clientTimestamp)}</td>
-        <td>${m.latitude ?? '—'}</td>
-        <td>${m.longitude ?? '—'}</td>
+        <td>${hasCoords ? lat : '—'}</td>
+        <td>${hasCoords ? lon : '—'}</td>
         <td>${esc(m.deviceInfo ?? '—')}</td>
-        <td>${m.latitude != null && m.longitude != null
+        <td>${hasCoords
           ? `<a class="link" target="_blank" rel="noopener"
-               href="https://www.openstreetmap.org/?mlat=${m.latitude}&mlon=${m.longitude}#map=16/${m.latitude}/${m.longitude}">Open map</a>`
+               href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}">Open map</a>`
           : '—'}</td>
-      </tr>`).join('')
+      </tr>`;
+    }).join('')
       : '<tr><td colspan="5" class="text-center p-6 opacity-70">No location samples.</td></tr>';
   } catch (err) {
     info.innerHTML = `<p class="text-error">${err.status === 404 ? 'Recording not found.' : 'Failed to load this recording.'}
       <a class="link" href="recordings.html">Back to recordings</a></p>`;
-    showApiError(err);
+    if (err.status !== 404) showApiError(err); // the card already explains a 404 fully
   }
 }
 
