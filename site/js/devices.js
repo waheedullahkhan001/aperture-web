@@ -27,6 +27,7 @@ async function load() {
       </tr>`).join('')
       : '<tr><td colspan="5" class="text-center p-6 opacity-70">No devices paired yet.</td></tr>';
   } catch (err) {
+    rows.innerHTML = '<tr><td colspan="5" class="text-center p-6 text-error">Failed to load devices.</td></tr>';
     showApiError(err);
   }
 }

@@ -46,6 +46,7 @@ async function load() {
         </td>
       </tr>`).join('');
   } catch (err) {
+    rows.innerHTML = '<tr><td colspan="5" class="text-center p-6 text-error">Failed to load recordings.</td></tr>';
     showApiError(err);
   }
 }

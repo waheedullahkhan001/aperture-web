@@ -26,6 +26,7 @@ async function load() {
       </tr>`).join('')
       : '<tr><td colspan="4" class="text-center p-6 opacity-70">No emergency contacts yet — alerts cannot be sent until you add one.</td></tr>';
   } catch (err) {
+    rows.innerHTML = '<tr><td colspan="4" class="text-center p-6 text-error">Failed to load contacts.</td></tr>';
     showApiError(err);
   }
 }
@@ -76,6 +77,10 @@ rows.addEventListener('click', async (e) => {
   }
 });
 
-document.querySelector('[data-close]').addEventListener('click', () => dialog.close());
+document.querySelectorAll('dialog [data-close]').forEach((btn) =>
+  btn.addEventListener('click', () => btn.closest('dialog').close()));
+
+// Reset edit state whenever the dialog closes, however it was dismissed.
+dialog.addEventListener('close', () => { editingId = null; });
 
 load();
