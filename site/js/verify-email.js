@@ -27,15 +27,19 @@ resendBtn.addEventListener('click', async () => {
     toast('A new code was sent', 'success');
   } catch (err) {
     showApiError(err);
+    resendBtn.removeAttribute('disabled'); // failed — let them retry immediately
+    return;
   }
+  // Cooldown only after a successful send.
   let left = 30;
   const original = resendBtn.textContent;
   const timer = setInterval(() => {
-    resendBtn.textContent = `Resend code (${left--}s)`;
-    if (left < 0) {
+    if (--left <= 0) {
       clearInterval(timer);
       resendBtn.textContent = original;
       resendBtn.removeAttribute('disabled');
+    } else {
+      resendBtn.textContent = `Resend code (${left}s)`;
     }
   }, 1000);
 });

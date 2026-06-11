@@ -1,5 +1,5 @@
 import { api, tokens } from './api.js';
-import { onSubmit, toast } from './ui.js';
+import { onSubmit } from './ui.js';
 
 // Already signed in? Go straight to the app.
 if (tokens.refresh) location.replace('recordings.html');
@@ -15,7 +15,7 @@ onSubmit(document.querySelector('#login-form'), async (fd) => {
     location.replace('recordings.html');
   } catch (err) {
     if (err.code === 'EMAIL_NOT_VERIFIED') {
-      toast('Please verify your email first', 'warning');
+      // No toast here — navigation would discard it; the verify page explains itself.
       location.assign(`verify-email.html?email=${encodeURIComponent(email)}`);
       return;
     }
