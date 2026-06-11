@@ -26,7 +26,8 @@
             <textarea id="messageTemplate" name="messageTemplate" class="textarea w-full" rows="5"
                       required maxlength="4000"></textarea>
             <p class="text-xs opacity-70 mt-1">Sent to every emergency contact (unless a contact has a custom
-              message). The live stream link is attached automatically.</p>
+              message). You can use the placeholders <code>{{streamUrl}}</code> and <code>{{ownerName}}</code> —
+              and if the message does not include the stream link, it is appended automatically.</p>
           </div>
           <button type="submit" class="btn btn-primary">Save settings</button>
         </form>
