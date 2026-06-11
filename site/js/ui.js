@@ -1,9 +1,11 @@
 // Tiny shared page helpers: HTML escaping, toasts, confirm dialog, formatting, forms.
 
 export function esc(value) {
-  const div = document.createElement('div');
-  div.textContent = String(value ?? '');
-  return div.innerHTML;
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;'); // safe for text AND double-quoted attribute contexts
 }
 
 function toastHost() {
@@ -42,6 +44,7 @@ export function confirmDialog(message, confirmLabel = 'Confirm') {
       const act = e.target.dataset?.act;
       if (act) { dialog.close(); dialog.remove(); resolve(act === 'ok'); }
     });
+    dialog.addEventListener('cancel', () => { dialog.remove(); resolve(false); }); // ESC key
     document.body.appendChild(dialog);
     dialog.showModal();
   });

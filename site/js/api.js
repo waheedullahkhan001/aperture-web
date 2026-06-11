@@ -9,6 +9,7 @@ export const tokens = {
   get access() { return localStorage.getItem(ACCESS_KEY); },
   get refresh() { return localStorage.getItem(REFRESH_KEY); },
   save({ accessToken, refreshToken }) {
+    if (!accessToken || !refreshToken) throw new ApiError({ detail: 'Malformed token response' }, 500);
     localStorage.setItem(ACCESS_KEY, accessToken);
     localStorage.setItem(REFRESH_KEY, refreshToken);
   },
@@ -74,7 +75,8 @@ async function request(path, { method = 'GET', body, auth = true, raw = false } 
   if (raw) return res;
   if (res.status === 204 || res.status === 202) return null;
   const text = await res.text();
-  return text ? JSON.parse(text) : null;
+  try { return text ? JSON.parse(text) : null; }
+  catch { throw new ApiError({ detail: 'Unexpected response format' }, res.status); }
 }
 
 export const api = {
@@ -88,6 +90,7 @@ export const api = {
     post: (p, body) => request(p, { method: 'POST', body, auth: false }),
   },
   // Fetch a protected binary (video segment) and return an object URL for <video>/<a>.
+  // Caller must URL.revokeObjectURL() the result when done — blobs stay in memory until then.
   async blobUrl(path) {
     const res = await request(path, { raw: true });
     return URL.createObjectURL(await res.blob());
