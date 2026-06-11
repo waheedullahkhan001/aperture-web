@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recording — Aperture</title>
+  <link rel="stylesheet" href="assets/app.css">
+</head>
+<body class="min-h-screen bg-base-200">
+  <header data-nav></header>
+  <main class="mx-auto max-w-5xl p-4 space-y-4">
+    <a class="link text-sm" href="recordings.html">← Back to recordings</a>
+
+    <div class="card bg-base-100 shadow">
+      <div class="card-body" id="info">
+        <span class="loading loading-spinner"></span>
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow hidden" id="player-card">
+      <div class="card-body">
+        <h2 class="card-title text-lg" id="player-title">Playback</h2>
+        <video id="player" class="w-full rounded" controls></video>
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow">
+      <div class="card-body p-0">
+        <h2 class="text-lg font-semibold p-4 pb-0">Video segments</h2>
+        <table class="table">
+          <thead><tr><th>#</th><th>Start</th><th>End</th><th>Size</th><th></th></tr></thead>
+          <tbody id="segments"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow">
+      <div class="card-body p-0">
+        <h2 class="text-lg font-semibold p-4 pb-0">Location samples</h2>
+        <table class="table">
+          <thead><tr><th>Time</th><th>Latitude</th><th>Longitude</th><th>Device</th><th>Map</th></tr></thead>
+          <tbody id="samples"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <button id="delete" class="btn btn-error btn-outline">Delete this recording</button>
+  </main>
+  <script type="module" src="js/recording.js"></script>
+</body>
+</html>
