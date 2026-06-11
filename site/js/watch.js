@@ -25,7 +25,8 @@ const STATUS_BADGE = {
   FAILED: 'badge-error badge-outline',
 };
 
-let pc = null;          // active WebRTC connection, if any
+let pc = null;           // active WebRTC connection, if any
+let hlsInstance = null;  // active hls.js instance, if any
 let playing = false;
 let pollTimer = null;
 
@@ -33,38 +34,56 @@ function showMessage(text, type = 'info') {
   messageEl.innerHTML = `<div class="alert alert-${type}">${esc(text)}</div>`;
 }
 
+function stopPlayback() {
+  pc?.close();
+  pc = null;
+  hlsInstance?.destroy();
+  hlsInstance = null;
+  player.srcObject = null;
+  player.removeAttribute('src');
+  playing = false; // lets the next poll start playback again
+}
+
 async function startPlayback(view) {
   if (playing) return;
   playing = true;
   try {
-    pc = await playWhep(player, view.webrtcUrl);     // low latency, first choice
+    pc = await playWhep(player, view.webrtcUrl); // low latency, first choice
+    pc.addEventListener('connectionstatechange', (e) => {
+      if (e.target !== pc) return; // stale event from a replaced connection
+      const state = pc.connectionState;
+      if (state === 'failed' || state === 'disconnected') {
+        stopPlayback();
+        showMessage('Stream connection lost — reconnecting…', 'warning');
+      }
+    });
   } catch {
-    playing = startHls(view.hlsUrl);                  // fallback: HLS (~5-10 s latency)
+    playing = startHls(view.hlsUrl); // fallback: HLS (~5-10 s latency)
     if (!playing) showMessage('Live video could not be loaded. The stream may be unreachable from your network.', 'warning');
   }
 }
 
 function startHls(hlsUrl) {
+  if (!hlsUrl) return false;
   try {
     if (player.canPlayType('application/vnd.apple.mpegurl')) { // Safari plays HLS natively
       player.src = hlsUrl;
       return true;
     }
     if (window.Hls?.isSupported()) {
-      const hls = new Hls();
-      hls.loadSource(hlsUrl);
-      hls.attachMedia(player);
+      hlsInstance = new Hls();
+      hlsInstance.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) {
+          stopPlayback();
+          showMessage('Stream connection lost — reconnecting…', 'warning');
+        }
+      });
+      hlsInstance.loadSource(hlsUrl);
+      hlsInstance.attachMedia(player);
       return true;
     }
   } catch { /* fall through */ }
   return false;
-}
-
-function stopPlayback() {
-  pc?.close();
-  pc = null;
-  player.srcObject = null;
-  player.removeAttribute('src');
 }
 
 function render(view) {
@@ -73,17 +92,25 @@ function render(view) {
   ownerEl.textContent = `Streamed by ${view.ownerName} — started ${fmtDateTime(view.startedAt)}`;
 
   const s = view.latestSample;
+  // Coerce coordinates to real numbers — they feed an href, so never trust raw values.
+  const lat = s ? parseFloat(s.latitude) : NaN;
+  const lon = s ? parseFloat(s.longitude) : NaN;
+  const hasCoords = !Number.isNaN(lat) && !Number.isNaN(lon);
   metaEl.innerHTML = `
     <p><span class="opacity-70">Last location update:</span> ${s ? fmtDateTime(s.clientTimestamp) : '—'}</p>
     <p><span class="opacity-70">Device:</span> ${s?.deviceInfo ? esc(s.deviceInfo) : '—'}</p>
-    <p><span class="opacity-70">Coordinates:</span> ${s && s.latitude != null ? `${s.latitude}, ${s.longitude}` : '—'}</p>
-    <p>${s && s.latitude != null
+    <p><span class="opacity-70">Coordinates:</span> ${hasCoords ? `${lat}, ${lon}` : '—'}</p>
+    <p>${hasCoords
       ? `<a class="link" target="_blank" rel="noopener"
-           href="https://www.openstreetmap.org/?mlat=${s.latitude}&mlon=${s.longitude}#map=16/${s.latitude}/${s.longitude}">Open location on map</a>`
+           href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}">Open location on map</a>`
       : ''}</p>`;
 }
 
+let refreshing = false; // a poll tick can outlast the 15 s interval on slow networks
+
 async function refresh() {
+  if (refreshing) return;
+  refreshing = true;
   try {
     const view = await api.public.get(`/api/public/watch/${id}?t=${encodeURIComponent(t)}`);
     render(view);
@@ -100,14 +127,19 @@ async function refresh() {
         : 'This recording failed before completing.', 'warning');
     }
   } catch (err) {
-    clearInterval(pollTimer);
-    stopPlayback();
-    document.querySelector('#player-wrap').classList.add('hidden');
-    showMessage(err.status === 403
-      ? 'This watch link is invalid.'
-      : err.status === 404
-        ? 'This recording no longer exists.'
-        : `Could not load the stream: ${err.message}`, 'error');
+    if (err.status === 403 || err.status === 404) { // genuinely terminal — stop for good
+      clearInterval(pollTimer);
+      stopPlayback();
+      document.querySelector('#player-wrap').classList.add('hidden');
+      showMessage(err.status === 403 ? 'This watch link is invalid.' : 'This recording no longer exists.', 'error');
+    } else if (!playing) {
+      // Transient (network blip, server restart): keep polling — this page must
+      // survive flaky mobile connections during an emergency. If video is already
+      // playing, stay quiet; the stream itself is the signal that matters.
+      showMessage('Connection problem — retrying…', 'warning');
+    }
+  } finally {
+    refreshing = false;
   }
 }
 
