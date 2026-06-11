@@ -1,0 +1,8 @@
+node_modules/
+site/assets/app.css
+site/vendor/
+context/
+docs/
+*.log
+.idea/
+.vscode/

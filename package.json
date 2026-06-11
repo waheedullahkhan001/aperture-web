@@ -1,0 +1,21 @@
+{
+  "name": "aperture-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "css": "tailwindcss -i styles/input.css -o site/assets/app.css",
+    "css:watch": "tailwindcss -i styles/input.css -o site/assets/app.css --watch",
+    "css:build": "tailwindcss -i styles/input.css -o site/assets/app.css --minify",
+    "vendor": "mkdir -p site/vendor && cp node_modules/hls.js/dist/hls.min.js site/vendor/hls.min.js",
+    "setup": "npm run vendor && npm run css",
+    "dev": "python3 -m http.server 5500 --directory site"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.0",
+    "tailwindcss": "^4.1.0",
+    "daisyui": "^5.0.0"
+  },
+  "dependencies": {
+    "hls.js": "^1.6.0"
+  }
+}
