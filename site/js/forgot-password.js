@@ -11,6 +11,7 @@ onSubmit(requestForm, async (fd) => {
   // Backend answers 202 even for unknown emails (no account enumeration).
   requestForm.classList.add('hidden');
   confirmForm.classList.remove('hidden');
+  confirmForm.querySelector('input')?.focus(); // move keyboard focus into the revealed form
 });
 
 onSubmit(confirmForm, async (fd) => {
