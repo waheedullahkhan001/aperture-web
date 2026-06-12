@@ -28,20 +28,27 @@ reproducible install path (the lockfile pins exact versions).
     npm install
     npm run setup        # builds CSS + copies hls.js into site/vendor/
     npm run css:watch    # keep running while editing
-    npm run dev          # serves site/ at http://localhost:5500
+    npm run dev          # http://localhost:5500 — serves site/ AND proxies the API + stream
 
-Run the backend separately (dev profile, port 8081, permissive CORS):
+`npm run dev` runs `dev-proxy.mjs` (zero dependencies): it serves `site/` and
+reverse-proxies `/api`, `/actuator`, and `/aperture` to the local backend stack at
+`http://localhost`. The browser therefore sees ONE origin — which mirrors production
+(nginx serves the static site same-origin as the API) and, crucially, is what lets the
+MediaMTX HLS `hlsSession` cookie reach the watch page. A cross-origin static server
+cannot receive that HttpOnly cookie, so live playback can only be tested same-origin.
 
-    cd ../aperture-service && ./gradlew bootRun
+`site/js/config.js` uses relative API URLs (`API_BASE = ''`) in both dev and prod,
+since both are same-origin. Override from the console only for UI-only work:
 
-`site/js/config.js` points the site at `http://localhost:8081` when served from
-port 5500, and at the page's own origin everywhere else (production). To target
-another backend without editing code, run once in the browser console:
+    localStorage.setItem('aperture.apiBase', 'http://localhost:8081')
 
-    localStorage.setItem('aperture.apiBase', 'http://localhost:9090')
+The backend stack (Spring API + MediaMTX + PostgreSQL + nginx + mailpit) runs via
+docker compose in `../aperture-service`; `npm run dev` assumes it is up at
+`http://localhost`. Outgoing emails (verification + alert) land in mailpit at
+http://localhost:8025 — that's where dev OTP codes appear.
 
-Dev-profile notes: the database is in-memory (wiped on restart) and OTP emails are
-printed to the backend log instead of being sent.
+    npm run dev:static   # http://localhost:5500, static only, no API proxy
+                         # (layout/CSS work offline; set the apiBase override to use it)
 
 ## Deploy
 

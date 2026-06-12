@@ -1,9 +1,11 @@
-// Where the Spring Boot API lives.
-// Production: Nginx serves this site on the SAME origin as the API, so '' (relative
-// URLs) is correct. Local dev: the site runs on python http.server :5500 while the
-// backend runs separately on :8081 (the backend's dev profile sets that port —
-// 8080 is taken by an unrelated Docker stack on the dev machine).
-// For ad-hoc testing against another backend, set an override once in the console:
-//   localStorage.setItem('aperture.apiBase', 'http://localhost:9090')
+// Where the Spring Boot API lives. Same-origin in BOTH environments:
+//   - production: nginx serves this site on the same origin as /api (and /aperture).
+//   - dev: `npm run dev` runs dev-proxy.mjs, which serves the site AND proxies /api
+//     + /aperture to the local nginx stack — so the browser sees one origin. This is
+//     required for the HLS `hlsSession` cookie (a cross-origin static server can never
+//     receive that HttpOnly cookie). So '' (relative URLs) is correct everywhere.
+// Escape hatch — point the app at another backend from the console (e.g. UI-only
+// work via `npm run dev:static`, which has no /api proxy):
+//   localStorage.setItem('aperture.apiBase', 'http://localhost:8081')
 const override = localStorage.getItem('aperture.apiBase');
-export const API_BASE = override ?? (location.port === '5500' ? 'http://localhost:8081' : '');
+export const API_BASE = override ?? '';

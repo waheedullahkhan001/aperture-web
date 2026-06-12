@@ -37,11 +37,23 @@ function stopPlayback() {
   playing = false; // lets the next poll start playback again
 }
 
+// The watch endpoint returns ABSOLUTE stream URLs (e.g. http://localhost/aperture/<id>/…).
+// Resolve them against THIS page's origin (keep path + query, drop scheme/host) so the
+// HttpOnly hlsSession cookie — which MediaMTX scopes to /aperture/<id>/ — is sent with
+// every child playlist and segment request. Same-origin is the backend's stated contract;
+// the /aperture/<id>/ path is preserved verbatim, and the ?t= secret is never re-injected.
+function sameOriginPath(url) {
+  try { const u = new URL(url, location.href); return u.pathname + u.search; }
+  catch { return url; }
+}
+
 async function startPlayback(view) {
   if (playing) return;
   playing = true;
+  const webrtcUrl = sameOriginPath(view.webrtcUrl);
+  const hlsUrl = sameOriginPath(view.hlsUrl);
   try {
-    pc = await playWhep(player, view.webrtcUrl); // low latency, first choice
+    pc = await playWhep(player, webrtcUrl); // low latency, first choice
     pc.addEventListener('connectionstatechange', (e) => {
       if (e.target !== pc) return; // stale event from a replaced connection
       const state = pc.connectionState;
@@ -51,7 +63,7 @@ async function startPlayback(view) {
       }
     });
   } catch {
-    playing = startHls(view.hlsUrl); // fallback: HLS (~5-10 s latency)
+    playing = startHls(hlsUrl); // fallback: HLS (~5-10 s latency)
     if (!playing) showMessage('Live video could not be loaded. The stream may be unreachable from your network.', 'warning');
   }
 }

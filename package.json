@@ -9,7 +9,8 @@
     "vendor": "mkdir -p site/vendor && cp node_modules/hls.js/dist/hls.min.js site/vendor/hls.min.js",
     "setup": "npm run vendor && npm run css",
     "setup:prod": "npm run vendor && npm run css:build",
-    "dev": "python3 -m http.server 5500 --directory site"
+    "dev": "node dev-proxy.mjs",
+    "dev:static": "python3 -m http.server 5500 --directory site"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.1.0",
