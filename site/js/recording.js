@@ -17,12 +17,25 @@ let currentBlobUrl = null;
 
 async function load() {
   try {
-    const { recording, segments, recentSamples } = await api.get(`/api/v1/recordings/${id}`);
+    const { recording, segments, recentSamples, watchUrl } = await api.get(`/api/v1/recordings/${id}`);
+
+    // Live view link: same id+secret as the emailed watch URL, but routed through our
+    // own origin (watch.html?id=…&t=…) so it works in dev without Nginx and in
+    // production alike. Only shown while the recording can still stream.
+    let watchButton = '';
+    if (watchUrl && (recording.status === 'PENDING' || recording.status === 'RECORDING')) {
+      const t = new URL(watchUrl).searchParams.get('t');
+      if (t) {
+        watchButton = `<a class="btn btn-sm btn-error" target="_blank" rel="noopener"
+          href="watch.html?id=${encodeURIComponent(recording.id)}&t=${encodeURIComponent(t)}">Watch live</a>`;
+      }
+    }
 
     info.innerHTML = `
       <div class="flex items-center gap-3 flex-wrap">
         <h1 class="card-title text-xl">Recording</h1>
         <span class="badge ${STATUS_BADGE[recording.status] ?? ''}">${esc(recording.status)}</span>
+        ${watchButton}
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1 text-sm mt-2">
         <p><span class="opacity-70">Started:</span> ${fmtDateTime(recording.startedAt)}</p>
