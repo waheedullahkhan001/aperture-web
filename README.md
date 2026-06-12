@@ -30,15 +30,15 @@ reproducible install path (the lockfile pins exact versions).
     npm run css:watch    # keep running while editing
     npm run dev          # serves site/ at http://localhost:5500
 
-Run the backend separately (dev profile, port 8080, permissive CORS):
+Run the backend separately (dev profile, port 8081, permissive CORS):
 
     cd ../aperture-service && ./gradlew bootRun
 
-`site/js/config.js` points the site at `http://localhost:8080` when served from
+`site/js/config.js` points the site at `http://localhost:8081` when served from
 port 5500, and at the page's own origin everywhere else (production). To target
 another backend without editing code, run once in the browser console:
 
-    localStorage.setItem('aperture.apiBase', 'http://localhost:8081')
+    localStorage.setItem('aperture.apiBase', 'http://localhost:9090')
 
 Dev-profile notes: the database is in-memory (wiped on restart) and OTP emails are
 printed to the backend log instead of being sent.
