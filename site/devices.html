@@ -11,7 +11,7 @@
   <main class="mx-auto max-w-5xl p-4 space-y-4">
     <div class="flex items-center justify-between flex-wrap gap-2">
       <h1 class="text-2xl font-bold">Devices</h1>
-      <button id="add" class="btn btn-primary">Pair new device</button>
+      <button id="add" class="btn btn-primary" data-icon="plus">Pair new device</button>
     </div>
 
     <div class="alert">
@@ -42,7 +42,7 @@
         </div>
         <div class="modal-action">
           <button type="button" class="btn" data-close>Cancel</button>
-          <button type="submit" class="btn btn-primary">Create token</button>
+          <button type="submit" class="btn btn-primary" data-icon="plus">Create token</button>
         </div>
       </form>
     </div>
@@ -56,7 +56,7 @@
       <div class="join w-full">
         <input id="token-value" class="input join-item w-full font-mono text-xs" readonly
                aria-label="Device token">
-        <button id="copy-token" type="button" class="btn join-item">Copy</button>
+        <button id="copy-token" type="button" class="btn join-item" data-icon="copy">Copy</button>
       </div>
       <div class="modal-action">
         <button type="button" class="btn btn-primary" data-close>Done</button>

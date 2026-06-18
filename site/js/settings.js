@@ -1,5 +1,6 @@
 import { api, requireAuth, logout, tokens, currentSessionId } from './api.js';
 import { esc, fmtDateTime, toast, confirmDialog, onSubmit, showApiError } from './ui.js';
+import { icon } from './icons.js';
 import './nav.js';
 
 requireAuth();
@@ -35,8 +36,8 @@ async function loadSessions() {
         <td>${fmtDateTime(s.lastUsedAt)}</td>
         <td>${fmtDateTime(s.expiresAt)}</td>
         <td class="text-right">
-          <button class="btn btn-sm btn-error btn-outline" data-revoke="${s.id}">
-            ${s.id === mine ? 'Log out' : 'Revoke'}</button>
+          <button class="btn btn-sm btn-error btn-outline gap-1" data-revoke="${s.id}">
+            ${s.id === mine ? `${icon('log-out')}Log out` : `${icon('ban')}Revoke`}</button>
         </td>
       </tr>`).join('');
   } catch (err) {

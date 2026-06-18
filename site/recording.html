@@ -9,7 +9,7 @@
 <body class="min-h-screen bg-base-200">
   <header data-nav></header>
   <main class="mx-auto max-w-5xl p-4 space-y-4">
-    <a class="link text-sm" href="recordings.html">← Back to recordings</a>
+    <a class="link text-sm inline-flex items-center gap-1" href="recordings.html" data-icon="arrow-left" data-icon-size="size-3">Back to recordings</a>
 
     <div class="card bg-base-100 shadow">
       <div class="card-body" id="info">
@@ -44,7 +44,7 @@
       </div>
     </div>
 
-    <button id="delete" class="btn btn-error btn-outline">Delete this recording</button>
+    <button id="delete" class="btn btn-error btn-outline" data-icon="trash-2">Delete this recording</button>
   </main>
   <script type="module" src="js/recording.js"></script>
 </body>

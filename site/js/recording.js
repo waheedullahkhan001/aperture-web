@@ -1,5 +1,6 @@
 import { api, requireAuth } from './api.js';
-import { esc, fmtDateTime, fmtBytes, toast, confirmDialog, showApiError, STATUS_BADGE } from './ui.js';
+import { esc, fmtDateTime, fmtBytes, toast, confirmDialog, showApiError, STATUS_BADGE, STATUS_ICON } from './ui.js';
+import { icon } from './icons.js';
 import './nav.js';
 
 requireAuth();
@@ -26,15 +27,15 @@ async function load() {
     if (watchUrl && (recording.status === 'PENDING' || recording.status === 'RECORDING')) {
       const t = new URL(watchUrl).searchParams.get('t');
       if (t) {
-        watchButton = `<a class="btn btn-sm btn-error" target="_blank" rel="noopener"
-          href="watch.html?id=${encodeURIComponent(recording.id)}&t=${encodeURIComponent(t)}">Watch live</a>`;
+        watchButton = `<a class="btn btn-sm btn-error gap-1" target="_blank" rel="noopener"
+          href="watch.html?id=${encodeURIComponent(recording.id)}&t=${encodeURIComponent(t)}">${icon('play')}Watch live</a>`;
       }
     }
 
     info.innerHTML = `
       <div class="flex items-center gap-3 flex-wrap">
         <h1 class="card-title text-xl">Recording</h1>
-        <span class="badge ${STATUS_BADGE[recording.status] ?? ''}">${esc(recording.status)}</span>
+        <span class="badge gap-1 ${STATUS_BADGE[recording.status] ?? ''}">${icon(STATUS_ICON[recording.status] ?? 'info', 'size-3')}${esc(recording.status)}</span>
         ${watchButton}
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1 text-sm mt-2">
@@ -52,11 +53,11 @@ async function load() {
         <td>${fmtDateTime(s.endTime)}</td>
         <td>${fmtBytes(s.sizeBytes)}</td>
         <td class="text-right whitespace-nowrap">
-          <button class="btn btn-sm" data-play="${s.segmentNumber}">Play</button>
-          <button class="btn btn-sm btn-outline" data-download="${s.segmentNumber}">Download</button>
+          <button class="btn btn-sm gap-1" data-play="${s.segmentNumber}">${icon('play')}Play</button>
+          <button class="btn btn-sm btn-outline gap-1" data-download="${s.segmentNumber}">${icon('download')}Download</button>
         </td>
       </tr>`).join('')
-      : '<tr><td colspan="5" class="text-center p-6 opacity-70">No video segments stored on the server yet.</td></tr>';
+      : `<tr><td colspan="5" class="p-10"><div class="flex flex-col items-center gap-2 opacity-60">${icon('film', 'size-10')}<span>No video segments stored on the server yet.</span></div></td></tr>`;
 
     samplesEl.innerHTML = recentSamples.length ? recentSamples.map((m) => {
       // Coerce coordinates to real numbers — they feed an href, so never trust raw values.
@@ -70,12 +71,12 @@ async function load() {
         <td>${hasCoords ? lon : '—'}</td>
         <td>${esc(m.deviceInfo ?? '—')}</td>
         <td>${hasCoords
-          ? `<a class="link" target="_blank" rel="noopener"
-               href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}">Open map</a>`
+          ? `<a class="link inline-flex items-center gap-1" target="_blank" rel="noopener"
+               href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}">${icon('map-pin', 'size-3')}Open map</a>`
           : '—'}</td>
       </tr>`;
     }).join('')
-      : '<tr><td colspan="5" class="text-center p-6 opacity-70">No location samples.</td></tr>';
+      : `<tr><td colspan="5" class="p-10"><div class="flex flex-col items-center gap-2 opacity-60">${icon('map-pin', 'size-10')}<span>No location samples.</span></div></td></tr>`;
   } catch (err) {
     info.innerHTML = `<p class="text-error">${err.status === 404 ? 'Recording not found.' : 'Failed to load this recording.'}
       <a class="link" href="recordings.html">Back to recordings</a></p>`;

@@ -62,3 +62,10 @@ only allows cross-origin access to the public watch endpoint). Required routes:
     # alert emails link to /watch/<uuid>?t=... — serve the watch page for those:
     location ~ ^/watch/ { try_files /watch.html =404; }
     location /          { try_files $uri $uri/ =404; }
+
+## Credits
+
+Icons are from [Lucide](https://lucide.dev) (ISC license — permissive, no
+attribution required). They are embedded as inline SVG in `site/js/icons.js`
+(no icon font, no runtime dependency); `stroke="currentColor"` lets Tailwind
+control size and color. Add or change icons by editing the set in that one file.

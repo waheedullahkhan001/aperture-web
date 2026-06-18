@@ -1,5 +1,6 @@
 import { api, requireAuth } from './api.js';
 import { esc, toast, confirmDialog, onSubmit, showApiError } from './ui.js';
+import { icon } from './icons.js';
 import './nav.js';
 
 requireAuth();
@@ -20,11 +21,11 @@ async function load() {
         <td>${esc(c.email)}</td>
         <td class="max-w-xs truncate">${c.messageOverride ? esc(c.messageOverride) : '<span class="opacity-50">default</span>'}</td>
         <td class="text-right whitespace-nowrap">
-          <button class="btn btn-sm" data-edit="${c.id}">Edit</button>
-          <button class="btn btn-sm btn-error btn-outline" data-delete="${c.id}">Remove</button>
+          <button class="btn btn-sm gap-1" data-edit="${c.id}">${icon('pencil')}Edit</button>
+          <button class="btn btn-sm btn-error btn-outline gap-1" data-delete="${c.id}">${icon('trash-2')}Remove</button>
         </td>
       </tr>`).join('')
-      : '<tr><td colspan="4" class="text-center p-6 opacity-70">No emergency contacts yet — alerts cannot be sent until you add one.</td></tr>';
+      : `<tr><td colspan="4" class="p-10"><div class="flex flex-col items-center gap-2 opacity-60">${icon('users', 'size-10')}<span>No emergency contacts yet — alerts cannot be sent until you add one.</span></div></td></tr>`;
   } catch (err) {
     rows.innerHTML = '<tr><td colspan="4" class="text-center p-6 text-error">Failed to load contacts.</td></tr>';
     showApiError(err);
