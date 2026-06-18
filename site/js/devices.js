@@ -1,5 +1,6 @@
 import { api, requireAuth } from './api.js';
 import { esc, fmtDateTime, toast, confirmDialog, onSubmit, showApiError } from './ui.js';
+import { icon } from './icons.js';
 import './nav.js';
 
 requireAuth();
@@ -19,13 +20,16 @@ async function load() {
         <td>${fmtDateTime(d.createdAt)}</td>
         <td>${fmtDateTime(d.lastSeenAt)}</td>
         <td>${d.revoked
-          ? '<span class="badge badge-ghost">revoked</span>'
-          : '<span class="badge badge-success">active</span>'}</td>
+          ? `<span class="badge badge-ghost gap-1">${icon('circle-x', 'size-3')}revoked</span>`
+          : `<span class="badge badge-success gap-1">${icon('circle-check', 'size-3')}active</span>`}</td>
         <td class="text-right">
-          ${d.revoked ? '' : `<button class="btn btn-sm btn-error btn-outline" data-revoke="${d.id}">Revoke</button>`}
+          ${d.revoked ? '' : `<button class="btn btn-sm btn-error btn-outline gap-1" data-revoke="${d.id}">${icon('ban')}Revoke</button>`}
         </td>
       </tr>`).join('')
-      : '<tr><td colspan="5" class="text-center p-6 opacity-70">No devices paired yet.</td></tr>';
+      : `<tr><td colspan="5" class="p-10">
+          <div class="flex flex-col items-center gap-2 opacity-60">${icon('smartphone', 'size-10')}
+            <span>No devices paired yet.</span>
+          </div></td></tr>`;
   } catch (err) {
     rows.innerHTML = '<tr><td colspan="5" class="text-center p-6 text-error">Failed to load devices.</td></tr>';
     showApiError(err);

@@ -1,6 +1,9 @@
 import { api } from './api.js';
-import { esc, fmtDateTime, STATUS_BADGE } from './ui.js';
+import { esc, fmtDateTime, STATUS_BADGE, STATUS_ICON } from './ui.js';
+import { icon } from './icons.js';
 import { playWhep } from './whep.js';
+
+const MSG_ICON = { info: 'info', success: 'circle-check', warning: 'triangle-alert', error: 'circle-x' };
 
 // Accept both URL shapes:
 //   production: /watch/<uuid>?t=<secret>   (Nginx rewrites to watch.html)
@@ -24,7 +27,7 @@ let playing = false;
 let pollTimer = null;
 
 function showMessage(text, type = 'info') {
-  messageEl.innerHTML = `<div class="alert alert-${type}">${esc(text)}</div>`;
+  messageEl.innerHTML = `<div class="alert alert-${type}">${icon(MSG_ICON[type] ?? 'info', 'size-5 shrink-0')}<span>${esc(text)}</span></div>`;
 }
 
 function stopPlayback() {
@@ -92,8 +95,9 @@ function startHls(hlsUrl) {
 }
 
 function render(view) {
-  statusEl.className = `badge ${STATUS_BADGE[view.status] ?? 'badge-ghost'}`;
-  statusEl.textContent = view.status;
+  statusEl.className = `badge gap-1 ${STATUS_BADGE[view.status] ?? 'badge-ghost'}`;
+  statusEl.innerHTML = `${icon(STATUS_ICON[view.status] ?? 'info', 'size-3')}<span></span>`;
+  statusEl.querySelector('span').textContent = view.status;
   ownerEl.textContent = `Streamed by ${view.ownerName} — started ${fmtDateTime(view.startedAt)}`;
 
   const s = view.latestSample;
@@ -106,8 +110,8 @@ function render(view) {
     <p><span class="opacity-70">Device:</span> ${s?.deviceInfo ? esc(s.deviceInfo) : '—'}</p>
     <p><span class="opacity-70">Coordinates:</span> ${hasCoords ? `${lat}, ${lon}` : '—'}</p>
     <p>${hasCoords
-      ? `<a class="link" target="_blank" rel="noopener"
-           href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}">Open location on map</a>`
+      ? `<a class="link inline-flex items-center gap-1" target="_blank" rel="noopener"
+           href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}">${icon('map-pin')}Open location on map</a>`
       : ''}</p>`;
 }
 

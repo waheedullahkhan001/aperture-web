@@ -1,5 +1,6 @@
 import { api, requireAuth } from './api.js';
-import { esc, fmtDateTime, toast, confirmDialog, showApiError, STATUS_BADGE } from './ui.js';
+import { esc, fmtDateTime, toast, confirmDialog, showApiError, STATUS_BADGE, STATUS_ICON } from './ui.js';
+import { icon } from './icons.js';
 import './nav.js';
 
 requireAuth();
@@ -23,19 +24,21 @@ async function load() {
     }
     pageInfo.textContent = `Page ${data.page + 1} of ${totalPages} (${data.totalElements} total)`;
     if (!data.content.length) {
-      rows.innerHTML = `<tr><td colspan="5" class="text-center p-6 opacity-70">
-        No recordings yet. Recordings appear here when your device streams to the server.</td></tr>`;
+      rows.innerHTML = `<tr><td colspan="5" class="p-10">
+        <div class="flex flex-col items-center gap-2 opacity-60">${icon('video', 'size-10')}
+          <span>No recordings yet. Recordings appear here when your device streams to the server.</span>
+        </div></td></tr>`;
       return;
     }
     rows.innerHTML = data.content.map((r) => `
       <tr>
         <td>${fmtDateTime(r.startedAt)}</td>
         <td>${fmtDateTime(r.endedAt)}</td>
-        <td><span class="badge ${STATUS_BADGE[r.status] ?? ''}">${esc(r.status)}</span></td>
+        <td><span class="badge gap-1 ${STATUS_BADGE[r.status] ?? ''}">${icon(STATUS_ICON[r.status] ?? 'info', 'size-3')}${esc(r.status)}</span></td>
         <td>${r.alertsDispatchedAt ? fmtDateTime(r.alertsDispatchedAt) : '—'}</td>
         <td class="text-right whitespace-nowrap">
-          <a class="btn btn-sm" href="recording.html?id=${r.id}">View</a>
-          <button class="btn btn-sm btn-error btn-outline" data-delete="${r.id}">Delete</button>
+          <a class="btn btn-sm gap-1" href="recording.html?id=${r.id}">${icon('play')}View</a>
+          <button class="btn btn-sm btn-error btn-outline gap-1" data-delete="${r.id}">${icon('trash-2')}Delete</button>
         </td>
       </tr>`).join('');
   } catch (err) {

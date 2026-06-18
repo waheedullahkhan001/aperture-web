@@ -1,4 +1,5 @@
 // Tiny shared page helpers: HTML escaping, toasts, confirm dialog, formatting, forms.
+import { icon } from './icons.js';
 
 export function esc(value) {
   return String(value ?? '')
@@ -19,10 +20,14 @@ function toastHost() {
   return host;
 }
 
+const TOAST_ICON = { info: 'info', success: 'circle-check', warning: 'triangle-alert', error: 'circle-x' };
+
 export function toast(message, type = 'info') { // type: info | success | error | warning
   const el = document.createElement('div');
   el.className = `alert alert-${type}`;
-  el.textContent = message;
+  el.setAttribute('role', type === 'error' || type === 'warning' ? 'alert' : 'status');
+  el.innerHTML = `${icon(TOAST_ICON[type] ?? 'info', 'size-5 shrink-0')}<span></span>`;
+  el.querySelector('span').textContent = message; // message stays text — no injection
   toastHost().appendChild(el);
   setTimeout(() => el.remove(), 4000);
 }
@@ -67,6 +72,14 @@ export const STATUS_BADGE = {
   RECORDING: 'badge-error animate-pulse',
   ENDED: 'badge-ghost',
   FAILED: 'badge-error badge-outline',
+};
+
+// Matching leading glyph for each status (shared so list/detail/watch stay in lockstep).
+export const STATUS_ICON = {
+  PENDING: 'clock',
+  RECORDING: 'radio',
+  ENDED: 'circle-check',
+  FAILED: 'circle-x',
 };
 
 // Shows an ApiError: highlights invalid fields on the form (if given) and toasts the message.
