@@ -23,8 +23,15 @@
 
       <div id="player-wrap">
         <video id="player" class="w-full rounded bg-black aspect-video" controls autoplay muted playsinline
-               aria-label="Live emergency stream"></video>
+               aria-label="Emergency stream"></video>
         <p id="player-note" class="text-xs opacity-70 mt-1">If video does not start, the stream may not have begun yet — this page retries automatically.</p>
+      </div>
+
+      <button id="resume-live" type="button" class="btn btn-sm btn-error gap-1 mt-2 hidden" data-icon="radio">Resume live</button>
+
+      <div id="clips-wrap" class="mt-3 hidden">
+        <h2 class="text-sm font-semibold opacity-70 mb-2 flex items-center gap-1" data-icon="film" data-icon-size="size-4">Clips</h2>
+        <ul id="clips" class="flex flex-col gap-1"></ul>
       </div>
 
       <div id="meta" class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1 text-sm mt-2"></div>

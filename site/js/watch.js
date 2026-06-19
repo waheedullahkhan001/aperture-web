@@ -1,4 +1,5 @@
 import { api } from './api.js';
+import { API_BASE } from './config.js';
 import { esc, fmtDateTime, STATUS_BADGE, STATUS_ICON } from './ui.js';
 import { icon } from './icons.js';
 import { playWhep } from './whep.js';
@@ -25,6 +26,15 @@ let pc = null;           // active WebRTC connection, if any
 let hlsInstance = null;  // active hls.js instance, if any
 let playing = false;
 let pollTimer = null;
+let clipMode = false;    // user is reviewing a recorded clip → suppress live auto-restart
+let activeSeg = null;    // segmentNumber currently playing as a clip
+let clipsKey = '';       // signature of the last-rendered clip set (avoids disruptive re-renders)
+let lastView = null;     // most recent watch payload (used by the resume-live button)
+
+const clipsWrap = document.querySelector('#clips-wrap');
+const clipsEl = document.querySelector('#clips');
+const resumeLiveBtn = document.querySelector('#resume-live');
+const playerNote = document.querySelector('#player-note');
 
 function showMessage(text, type = 'info') {
   messageEl.innerHTML = `<div class="alert alert-${type}">${icon(MSG_ICON[type] ?? 'info', 'size-5 shrink-0')}<span>${esc(text)}</span></div>`;
@@ -115,6 +125,51 @@ function render(view) {
       : ''}</p>`;
 }
 
+const fmtClock = (iso) => { try { return new Date(iso).toLocaleTimeString(); } catch { return '—'; } };
+
+function fmtDuration(start, end) {
+  const ms = new Date(end) - new Date(start);
+  if (!(ms > 0)) return '';
+  const s = Math.round(ms / 1000);
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
+}
+
+// Render the recorded-clip list. Backend returns segments in segmentNumber order, which
+// isn't chronological once retro-uploaded (offline) clips are mixed in — so sort by
+// startTime. Guarded by clipsKey so an unchanged set doesn't disrupt the current selection.
+function renderClips(view) {
+  const segs = (view.segments || []).slice().sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+  if (!segs.length) { clipsWrap.classList.add('hidden'); clipsEl.innerHTML = ''; clipsKey = ''; return; }
+  const key = segs.map((s) => `${s.segmentNumber}:${s.startTime}`).join('|');
+  if (key === clipsKey) return;
+  clipsKey = key;
+  clipsWrap.classList.remove('hidden');
+  clipsEl.innerHTML = segs.map((s) => {
+    const up = s.source === 'UPLOADED';
+    const dur = fmtDuration(s.startTime, s.endTime);
+    return `<li><button type="button" data-seg="${esc(String(s.segmentNumber))}"
+      class="btn btn-sm btn-block justify-start gap-2 ${s.segmentNumber === activeSeg ? 'btn-active' : ''}">
+      ${icon(up ? 'upload' : 'film', 'size-4')}
+      <span class="font-mono text-xs">${esc(fmtClock(s.startTime))} – ${esc(fmtClock(s.endTime))}</span>
+      ${dur ? `<span class="opacity-60 text-xs">${dur}</span>` : ''}
+      ${up ? '<span class="badge badge-ghost badge-xs ml-auto">uploaded</span>' : ''}
+    </button></li>`;
+  }).join('');
+}
+
+// Play one recorded clip inline (token-authed mp4, same-origin so ?t= works — no cookie).
+function playClip(n) {
+  clipMode = true;
+  activeSeg = Number(n);
+  stopPlayback();             // tear down any live WHEP/HLS first
+  playerNote.classList.add('hidden');
+  player.muted = false;       // user-initiated playback → sound on
+  player.src = `${API_BASE}/api/public/watch/${id}/segments/${encodeURIComponent(n)}?t=${encodeURIComponent(t)}`;
+  player.play().catch(() => {});
+  clipsEl.querySelectorAll('[data-seg]').forEach((b) => b.classList.toggle('btn-active', b.dataset.seg === String(n)));
+  resumeLiveBtn.classList.toggle('hidden', lastView?.status !== 'RECORDING');
+}
+
 let refreshing = false; // a poll tick can outlast the 15 s interval on slow networks
 
 async function refresh() {
@@ -122,26 +177,40 @@ async function refresh() {
   refreshing = true;
   try {
     const view = await api.public.get(`/api/public/watch/${id}?t=${encodeURIComponent(t)}`);
+    lastView = view;
     render(view);
-    if (view.status === 'RECORDING') {
+    renderClips(view);
+    const live = view.status === 'RECORDING';
+    resumeLiveBtn.classList.toggle('hidden', !(clipMode && live));
+    // Polling continues even after the stream ends — retro-uploaded clips can arrive
+    // later and should appear without a manual refresh. Only 403/404 stops it (below).
+    if (clipMode) {
+      // Reviewing a recorded clip — leave its playback and the message untouched.
+    } else if (live) {
       messageEl.innerHTML = '';
+      playerNote.classList.remove('hidden');
       startPlayback(view);
     } else if (view.status === 'PENDING') {
+      playerNote.classList.remove('hidden');
       showMessage('Waiting for the stream to start…');
-    } else { // ENDED or FAILED — terminal states
+    } else { // ENDED or FAILED — clips become the playback path
       stopPlayback();
-      clearInterval(pollTimer);
-      showMessage(view.status === 'ENDED'
-        ? 'This stream has ended.'
-        : 'This recording failed before completing.', 'warning');
+      playerNote.classList.add('hidden');
+      const n = (view.segments || []).length;
+      if (view.status === 'ENDED') {
+        showMessage(n ? `Stream ended — ${n} clip${n > 1 ? 's' : ''} below to review.` : 'This stream has ended; no clips were saved.', n ? 'info' : 'warning');
+      } else {
+        showMessage(n ? `Recording failed — ${n} clip${n > 1 ? 's' : ''} below to review.` : 'This recording failed before completing.', 'warning');
+      }
     }
   } catch (err) {
     if (err.status === 403 || err.status === 404) { // genuinely terminal — stop for good
       clearInterval(pollTimer);
       stopPlayback();
       document.querySelector('#player-wrap').classList.add('hidden');
+      clipsWrap.classList.add('hidden');
       showMessage(err.status === 403 ? 'This watch link is invalid.' : 'This recording no longer exists.', 'error');
-    } else if (!playing) {
+    } else if (!playing && !clipMode) {
       // Transient (network blip, server restart): keep polling — this page must
       // survive flaky mobile connections during an emergency. If video is already
       // playing, stay quiet; the stream itself is the signal that matters.
@@ -151,6 +220,22 @@ async function refresh() {
     refreshing = false;
   }
 }
+
+clipsEl.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-seg]');
+  if (b) playClip(b.dataset.seg);
+});
+
+resumeLiveBtn.addEventListener('click', () => {
+  clipMode = false;
+  activeSeg = null;
+  resumeLiveBtn.classList.add('hidden');
+  clipsEl.querySelectorAll('.btn-active').forEach((b) => b.classList.remove('btn-active'));
+  player.pause();
+  player.removeAttribute('src');
+  player.muted = true; // re-mute so autoplay is allowed when live resumes
+  if (lastView?.status === 'RECORDING') { playing = false; startPlayback(lastView); }
+});
 
 if (!id || !t) {
   document.querySelector('#player-wrap').classList.add('hidden');
