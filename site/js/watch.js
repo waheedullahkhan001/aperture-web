@@ -32,6 +32,10 @@ let clipMode = false;    // user is reviewing a recorded clip → suppress live 
 let activeSeg = null;    // segmentNumber currently playing as a clip
 let clipsKey = '';       // signature of the last-rendered clip set (avoids disruptive re-renders)
 let lastView = null;     // most recent watch payload (used by the resume-live button)
+let prevStatus = null;   // to detect status transitions (e.g. RECORDING → ENDED)
+let recordedTried = false; // loaded the ENDED recorded timeline once
+let hasTimeline = false; // ENDED recording has continuous streamed footage to scrub
+let currentSpan = null;  // the recorded span loaded (for the "Full recording" button)
 
 const clipsWrap = document.querySelector('#clips-wrap');
 const clipsEl = document.querySelector('#clips');
@@ -77,7 +81,7 @@ function startHls(hlsUrl) {
       return true;
     }
     if (window.Hls?.isSupported()) {
-      hlsInstance = new Hls();
+      hlsInstance = new Hls({ lowLatencyMode: true, liveSyncDurationCount: 3 }); // hug the live edge
       hlsInstance.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) {
           stopPlayback();
@@ -153,6 +157,48 @@ function fmtDuration(start, end) {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
 }
 
+// MediaMTX recorded playback (STREAMED footage), proxied same-origin under /playback.
+// Build the /playback/get URL ourselves — the list's `url` field has the wrong host and
+// no token. path keeps a raw slash and `start` is the RFC 3339 value verbatim from
+// /playback/list; this exact form is what the running stack accepts.
+function playbackUrl(start, duration) {
+  return `${API_BASE}/playback/get?path=aperture/${id}&start=${start}&duration=${duration}&format=mp4&t=${encodeURIComponent(t)}`;
+}
+const durationSecs = (start, end) => Math.max(1, Math.round((new Date(end) - new Date(start)) / 1000));
+
+async function loadSpans() {
+  try {
+    const spans = await api.public.get(`/playback/list?path=aperture/${id}&t=${encodeURIComponent(t)}`);
+    return Array.isArray(spans) ? spans : [];
+  } catch { return []; } // 404 "no recording segments found" → no continuous timeline
+}
+
+// Load a continuous recorded span as the scrubbable main video (native <video>, with the
+// correct duration + faststart from MediaMTX). currentSpan lets "Full recording" return.
+function loadRecordedSpan(span) {
+  currentSpan = span;
+  clipMode = false;
+  activeSeg = null;
+  stopPlayback();
+  clipsEl.querySelectorAll('.btn-active').forEach((b) => b.classList.remove('btn-active'));
+  playerNote.classList.add('hidden');
+  player.muted = false;
+  player.src = playbackUrl(span.start, span.duration);
+  player.load();
+  player.play().catch(() => {}); // autoplay may be blocked — controls are there
+  showReturnButton(null); // this IS the default view for an ended recording
+}
+
+// Contextual "return to the default source" button: back to LIVE during a recording, or
+// back to the FULL RECORDING timeline after it ended. Hidden when already on the default.
+function showReturnButton(kind) { // 'live' | 'timeline' | null
+  if (!kind) { resumeLiveBtn.classList.add('hidden'); return; }
+  resumeLiveBtn.classList.remove('hidden');
+  resumeLiveBtn.innerHTML = kind === 'live'
+    ? `${icon('radio', 'size-4')}Resume live`
+    : `${icon('film', 'size-4')}Full recording`;
+}
+
 // Render the recorded-clip list. Backend returns segments in segmentNumber order, which
 // isn't chronological once retro-uploaded (offline) clips are mixed in — so sort by
 // startTime. Guarded by clipsKey so an unchanged set doesn't disrupt the current selection.
@@ -171,22 +217,29 @@ function renderClips(view) {
       ${icon(up ? 'upload' : 'film', 'size-4')}
       <span class="font-mono text-xs">${esc(fmtClock(s.startTime))} – ${esc(fmtClock(s.endTime))}</span>
       ${dur ? `<span class="opacity-60 text-xs">${dur}</span>` : ''}
-      ${up ? '<span class="badge badge-ghost badge-xs ml-auto">uploaded</span>' : ''}
+      <span class="badge badge-xs ml-auto ${up ? 'badge-ghost' : 'badge-info'}">${up ? 'uploaded' : 'live'}</span>
     </button></li>`;
   }).join('');
 }
 
-// Play one recorded clip inline (token-authed mp4, same-origin so ?t= works — no cookie).
+// Play one clip standalone. STREAMED clips go through MediaMTX playback/get (continuous,
+// correct duration — fixes the old raw-fragment 0:04 bug); UPLOADED clips are already
+// standalone MP4s on the API. Same-origin so the ?t= secret authorises without a cookie.
 function playClip(n) {
+  const seg = (lastView?.segments || []).find((s) => String(s.segmentNumber) === String(n));
+  if (!seg) return;
   clipMode = true;
   activeSeg = Number(n);
-  stopPlayback();             // tear down any live WHEP/HLS first
+  stopPlayback();
   playerNote.classList.add('hidden');
-  player.muted = false;       // user-initiated playback → sound on
-  player.src = `${API_BASE}/api/public/watch/${id}/segments/${encodeURIComponent(n)}?t=${encodeURIComponent(t)}`;
+  player.muted = false; // user-initiated playback → sound on
+  player.src = seg.source === 'UPLOADED'
+    ? `${API_BASE}/api/public/watch/${id}/segments/${encodeURIComponent(n)}?t=${encodeURIComponent(t)}`
+    : playbackUrl(seg.startTime, durationSecs(seg.startTime, seg.endTime));
   player.play().catch(() => {});
   clipsEl.querySelectorAll('[data-seg]').forEach((b) => b.classList.toggle('btn-active', b.dataset.seg === String(n)));
-  resumeLiveBtn.classList.toggle('hidden', lastView?.status !== 'RECORDING');
+  // Offer a way back: to live during a recording, to the full recording after it ended.
+  showReturnButton(lastView?.status === 'RECORDING' ? 'live' : (hasTimeline ? 'timeline' : null));
 }
 
 let refreshing = false; // a poll tick can outlast the interval on slow networks
@@ -199,28 +252,48 @@ async function refresh() {
     lastView = view;
     render(view);
     renderClips(view);
+
+    // On the live→ended transition, drop a stale clip/live view so the ended branch loads
+    // the recorded timeline fresh.
+    if (view.status !== prevStatus) {
+      if ((view.status === 'ENDED' || view.status === 'FAILED') && (prevStatus === 'RECORDING' || prevStatus === 'PENDING')) {
+        clipMode = false; activeSeg = null; recordedTried = false;
+      }
+      prevStatus = view.status;
+    }
+
     const live = view.status === 'RECORDING';
-    resumeLiveBtn.classList.toggle('hidden', !(clipMode && live));
     // Polling continues even after the stream ends — retro-uploaded clips can arrive
     // later and should appear without a manual refresh. Only 403/404 stops it (below).
     if (clipMode) {
-      // Reviewing a recorded clip — leave its playback and the message untouched.
+      // Reviewing a specific clip — leave its playback, message and return button untouched.
     } else if (live) {
       messageEl.innerHTML = '';
       playerNote.classList.remove('hidden');
+      showReturnButton(null);
       startPlayback(view);
     } else if (view.status === 'PENDING') {
       playerNote.classList.remove('hidden');
+      showReturnButton(null);
       showMessage('Waiting for the stream to start…');
-    } else { // ENDED or FAILED — clips become the playback path
-      stopPlayback();
+    } else if (!recordedTried) { // ENDED or FAILED — load the recorded timeline once
+      recordedTried = true;
       playerNote.classList.add('hidden');
+      const spans = view.status === 'ENDED' ? await loadSpans() : [];
+      hasTimeline = spans.length > 0;
+      if (hasTimeline) loadRecordedSpan(spans[0]); // scrubbable continuous recording
+      else { stopPlayback(); showReturnButton(null); }
       const n = (view.segments || []).length;
+      let msg; let type = 'info';
       if (view.status === 'ENDED') {
-        showMessage(n ? `Stream ended — ${n} clip${n > 1 ? 's' : ''} below to review.` : 'This stream has ended; no clips were saved.', n ? 'info' : 'warning');
+        if (hasTimeline) msg = 'Stream ended — showing the recording. Scrub the timeline, or pick a clip below.';
+        else if (n) msg = `Stream ended — ${n} clip${n > 1 ? 's' : ''} below to review.`;
+        else { msg = 'This stream has ended; no recording was saved.'; type = 'warning'; }
       } else {
-        showMessage(n ? `Recording failed — ${n} clip${n > 1 ? 's' : ''} below to review.` : 'This recording failed before completing.', 'warning');
+        msg = n ? `Recording failed — ${n} clip${n > 1 ? 's' : ''} below to review.` : 'This recording failed before completing.';
+        type = 'warning';
       }
+      showMessage(msg, type);
     }
   } catch (err) {
     if (err.status === 403 || err.status === 404) { // genuinely terminal — stop for good
@@ -229,6 +302,7 @@ async function refresh() {
       stopPlayback();
       document.querySelector('#player-wrap').classList.add('hidden');
       clipsWrap.classList.add('hidden');
+      resumeLiveBtn.classList.add('hidden');
       showMessage(err.status === 403 ? 'This watch link is invalid.' : 'This recording no longer exists.', 'error');
     } else if (!playing && !clipMode) {
       // Transient (network blip, server restart): keep polling — this page must
@@ -247,14 +321,21 @@ clipsEl.addEventListener('click', (e) => {
 });
 
 resumeLiveBtn.addEventListener('click', () => {
-  clipMode = false;
-  activeSeg = null;
-  resumeLiveBtn.classList.add('hidden');
-  clipsEl.querySelectorAll('.btn-active').forEach((b) => b.classList.remove('btn-active'));
-  player.pause();
-  player.removeAttribute('src');
-  player.muted = true; // re-mute so autoplay is allowed when live resumes
-  if (lastView?.status === 'RECORDING') { playing = false; startPlayback(lastView); }
+  if (lastView?.status === 'RECORDING') {
+    clipMode = false;
+    activeSeg = null;
+    clipsEl.querySelectorAll('.btn-active').forEach((b) => b.classList.remove('btn-active'));
+    showReturnButton(null);
+    player.pause();
+    player.removeAttribute('src');
+    player.muted = true; // re-mute so autoplay is allowed when live resumes
+    playing = false;
+    startPlayback(lastView);
+  } else if (currentSpan) {
+    loadRecordedSpan(currentSpan); // back to the full recording (clears clip + hides button)
+  } else {
+    showReturnButton(null);
+  }
 });
 
 // Adaptive poll: fast while the stream is live so a moving responder's location feels
