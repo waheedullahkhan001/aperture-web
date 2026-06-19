@@ -2,7 +2,9 @@ import { api } from './api.js';
 import { API_BASE } from './config.js';
 import { esc, fmtDateTime, STATUS_BADGE, STATUS_ICON } from './ui.js';
 import { icon } from './icons.js';
-import { playWhep } from './whep.js';
+// NOTE: live playback is HLS-only. WebRTC/WHEP media is not plumbed server-side (only the
+// signalling proxy exists), so WHEP half-negotiates and the video spins forever — see
+// whep.js, ready to re-enable as a low-latency path once the server provides WebRTC media.
 
 const MSG_ICON = { info: 'info', success: 'circle-check', warning: 'triangle-alert', error: 'circle-x' };
 
@@ -22,7 +24,6 @@ const metaEl = document.querySelector('#meta');
 const messageEl = document.querySelector('#message');
 const player = document.querySelector('#player');
 
-let pc = null;           // active WebRTC connection, if any
 let hlsInstance = null;  // active hls.js instance, if any
 let playing = false;
 let pollTimer = null;
@@ -42,8 +43,6 @@ function showMessage(text, type = 'info') {
 }
 
 function stopPlayback() {
-  pc?.close();
-  pc = null;
   hlsInstance?.destroy();
   hlsInstance = null;
   player.srcObject = null;
@@ -61,25 +60,13 @@ function sameOriginPath(url) {
   catch { return url; }
 }
 
-async function startPlayback(view) {
+function startPlayback(view) {
   if (playing) return;
-  playing = true;
-  const webrtcUrl = sameOriginPath(view.webrtcUrl);
-  const hlsUrl = sameOriginPath(view.hlsUrl);
-  try {
-    pc = await playWhep(player, webrtcUrl); // low latency, first choice
-    pc.addEventListener('connectionstatechange', (e) => {
-      if (e.target !== pc) return; // stale event from a replaced connection
-      const state = pc.connectionState;
-      if (state === 'failed' || state === 'disconnected') {
-        stopPlayback();
-        showMessage('Stream connection lost — reconnecting…', 'warning');
-      }
-    });
-  } catch {
-    playing = startHls(hlsUrl); // fallback: HLS (~5-10 s latency)
-    if (!playing) showMessage('Live video could not be loaded. The stream may be unreachable from your network.', 'warning');
-  }
+  // HLS only — same-origin so the hlsSession cookie flows; MediaMTX builds the muxer on
+  // demand and the playlist carries the AAC audio track. (WHEP intentionally not used; see
+  // the import note.) hls.js' fatal-error handler resets `playing` so the poll retries.
+  playing = startHls(sameOriginPath(view.hlsUrl));
+  if (!playing) showMessage('Live video could not be loaded. The stream may be unreachable from your network.', 'warning');
 }
 
 function startHls(hlsUrl) {
