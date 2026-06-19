@@ -15,28 +15,37 @@ const playerCard = document.querySelector('#player-card');
 const player = document.querySelector('#player');
 const playerTitle = document.querySelector('#player-title');
 let currentBlobUrl = null;
+let currentWatchUrl = null; // the shareable public watch URL (for the copy button)
 
 async function load() {
   try {
-    const { recording, segments, recentSamples, watchUrl } = await api.get(`/api/v1/recordings/${id}`);
+    const { recording, segments, recentSamples, watchUrl, viewRevoked } = await api.get(`/api/v1/recordings/${id}`);
+    currentWatchUrl = watchUrl || null;
 
-    // Live view link: same id+secret as the emailed watch URL, but routed through our
-    // own origin (watch.html?id=…&t=…) so it works in dev without Nginx and in
-    // production alike. Only shown while the recording can still stream.
-    let watchButton = '';
-    if (watchUrl && (recording.status === 'PENDING' || recording.status === 'RECORDING')) {
+    // Watch-link controls. The link is a capability URL (anyone holding it can view).
+    // Owner can open it ("Watch live", routed via our own origin so it works in dev too),
+    // share it ("Copy watch link" = the public absolute URL the emails use), or revoke it.
+    // A revoked link is dead everywhere (public view, clips, live HLS all 403), so the
+    // controls collapse to a single "revoked" badge.
+    let linkControls = '';
+    if (viewRevoked) {
+      linkControls = `<span class="badge badge-ghost gap-1">${icon('ban', 'size-3')}Watch link revoked</span>`;
+    } else if (watchUrl) {
       const t = new URL(watchUrl).searchParams.get('t');
-      if (t) {
-        watchButton = `<a class="btn btn-sm btn-error gap-1" target="_blank" rel="noopener"
-          href="watch.html?id=${encodeURIComponent(recording.id)}&t=${encodeURIComponent(t)}">${icon('play')}Watch live</a>`;
-      }
+      const live = (recording.status === 'PENDING' || recording.status === 'RECORDING') && t
+        ? `<a class="btn btn-sm btn-error gap-1" target="_blank" rel="noopener"
+             href="watch.html?id=${encodeURIComponent(recording.id)}&t=${encodeURIComponent(t)}">${icon('play')}Watch live</a>`
+        : '';
+      linkControls = `${live}
+        <button type="button" class="btn btn-sm btn-outline gap-1" data-copy-link>${icon('copy')}Copy watch link</button>
+        <button type="button" class="btn btn-sm btn-error btn-outline gap-1" data-revoke-link>${icon('ban')}Revoke watch link</button>`;
     }
 
     info.innerHTML = `
       <div class="flex items-center gap-3 flex-wrap">
         <h1 class="card-title text-xl">Recording</h1>
         <span class="badge gap-1 ${STATUS_BADGE[recording.status] ?? ''}">${icon(STATUS_ICON[recording.status] ?? 'info', 'size-3')}${esc(recording.status)}</span>
-        ${watchButton}
+        ${linkControls}
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1 text-sm mt-2">
         <p><span class="opacity-70">Started:</span> ${fmtDateTime(recording.startedAt)}</p>
@@ -93,6 +102,30 @@ async function segmentUrl(n) {
 let busy = false; // one segment fetch at a time keeps memory bounded and blocks double-clicks
 
 document.querySelector('main').addEventListener('click', async (e) => {
+  // Copy the shareable public watch URL.
+  if (e.target.closest('[data-copy-link]')) {
+    if (!currentWatchUrl) return;
+    try {
+      await navigator.clipboard.writeText(currentWatchUrl);
+      toast('Watch link copied to clipboard', 'success');
+    } catch {
+      toast('Could not copy automatically — open “Watch live” and copy from the address bar', 'warning');
+    }
+    return;
+  }
+  // Revoke the watch link — irreversible, kills the ?t= secret everywhere.
+  if (e.target.closest('[data-revoke-link]')) {
+    if (!await confirmDialog('Revoke this watch link? Anyone who already has it — including emergency contacts you have shared it with — immediately loses access to the live view, clips and playback. This cannot be undone.', 'Revoke link')) return;
+    try {
+      await api.post(`/api/v1/recordings/${id}/revoke-link`);
+      toast('Watch link revoked', 'success');
+      load(); // reflect viewRevoked
+    } catch (err) {
+      showApiError(err);
+    }
+    return;
+  }
+
   const playBtn = e.target.closest('[data-play]');
   const dlBtn = e.target.closest('[data-download]');
   const btn = playBtn ?? dlBtn;
