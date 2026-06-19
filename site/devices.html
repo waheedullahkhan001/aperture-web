@@ -54,13 +54,14 @@
 
   <dialog id="token-dialog" class="modal">
     <div class="modal-box">
-      <h2 class="text-lg font-bold">Device token created</h2>
-      <p class="text-sm py-2">Copy this token into the Android app now —
-        <b>it is shown only once</b> and cannot be retrieved later.</p>
+      <h2 class="text-lg font-bold">Device paired — scan to connect</h2>
+      <p class="text-sm py-2">Scan this code with the Aperture Android app, or copy the
+        connect code below. It embeds the device token and is <b>shown only once</b>.</p>
+      <div id="qr" class="bg-white p-3 rounded-box w-fit mx-auto my-2" aria-label="Pairing QR code"></div>
       <div class="join w-full">
-        <input id="token-value" class="input join-item w-full font-mono text-xs" readonly
-               aria-label="Device token">
-        <button id="copy-token" type="button" class="btn join-item" data-icon="copy">Copy</button>
+        <input id="connect-value" class="input join-item w-full font-mono text-xs" readonly
+               aria-label="Connect code">
+        <button id="copy-connect" type="button" class="btn join-item" data-icon="copy">Copy</button>
       </div>
       <div class="modal-action">
         <button type="button" class="btn btn-primary" data-close>Done</button>

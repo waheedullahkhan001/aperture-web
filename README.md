@@ -69,3 +69,11 @@ Icons are from [Lucide](https://lucide.dev) (ISC license — permissive, no
 attribution required). They are embedded as inline SVG in `site/js/icons.js`
 (no icon font, no runtime dependency); `stroke="currentColor"` lets Tailwind
 control size and color. Add or change icons by editing the set in that one file.
+
+Vendored runtime libraries (copied into `site/vendor/` by `npm run vendor`, not
+committed):
+- [hls.js](https://github.com/video-dev/hls.js) — Apache-2.0 — HLS playback on the watch page.
+- [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) — MIT — device-pairing QR code.
+
+Deployment note: `site/js/devices.js` imports `vendor/qrcode.mjs` as an ES module, so
+the web server must serve `.mjs` with a JavaScript MIME type (`text/javascript`).

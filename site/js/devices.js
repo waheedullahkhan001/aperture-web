@@ -1,6 +1,7 @@
 import { api, requireAuth } from './api.js';
 import { esc, fmtDateTime, toast, confirmDialog, onSubmit, showApiError } from './ui.js';
 import { icon } from './icons.js';
+import qrcode from '../vendor/qrcode.mjs';
 import './nav.js';
 
 requireAuth();
@@ -8,8 +9,27 @@ requireAuth();
 const rows = document.querySelector('#rows');
 const addDialog = document.querySelector('#add-dialog');
 const tokenDialog = document.querySelector('#token-dialog');
-const tokenValue = document.querySelector('#token-value');
+const connectValue = document.querySelector('#connect-value');
+const qrEl = document.querySelector('#qr');
 let devices = [];
+
+// base64url( utf8( JSON ) ) — RFC 4648 url-safe alphabet, padding stripped.
+// Pinned exactly to the pairing spec so the Android app decodes it the same way.
+function base64url(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  bytes.forEach((b) => { bin += String.fromCharCode(b); });
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// The connect string the phone scans/pastes: { v, api, token }, base64url-encoded.
+// `api` = the origin the Android app should talk to. On the deployed site that's this
+// page's own origin (same-origin as the API); an explicit apiBase override wins for
+// pointing a real phone at a specific backend during testing.
+function connectString(token) {
+  const api = localStorage.getItem('aperture.apiBase') || location.origin;
+  return base64url(JSON.stringify({ v: 1, api, token }));
+}
 
 async function load() {
   try {
@@ -44,27 +64,32 @@ document.querySelector('#add').addEventListener('click', () => {
 onSubmit(document.querySelector('#add-form'), async (fd) => {
   const created = await api.post('/api/v1/me/devices', { name: fd.get('name') });
   addDialog.close();
-  tokenValue.value = created.token;
+  const code = connectString(created.token);
+  connectValue.value = code;
+  const qr = qrcode(0, 'M'); // type 0 = auto-size, ECC level M
+  qr.addData(code);
+  qr.make();
+  qrEl.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 16 });
   tokenDialog.showModal();
   load();
 });
 
-document.querySelector('#copy-token').addEventListener('click', async () => {
+document.querySelector('#copy-connect').addEventListener('click', async () => {
   try {
-    await navigator.clipboard.writeText(tokenValue.value);
-    toast('Token copied to clipboard', 'success');
+    await navigator.clipboard.writeText(connectValue.value);
+    toast('Connect code copied to clipboard', 'success');
   } catch {
     // Clipboard can be blocked (permissions, insecure context) — never fail silently
     // on a shown-once secret. Select the text so a manual copy still works.
-    tokenValue.select();
-    toast('Could not copy automatically — token selected, press Ctrl+C', 'warning');
+    connectValue.select();
+    toast('Could not copy automatically — code selected, press Ctrl+C', 'warning');
   }
 });
 
-// The token cannot be retrieved again: block ESC so it can only be dismissed via
-// the Done button, and wipe the plaintext from the DOM once the dialog closes.
+// The connect code embeds the one-time token and can't be retrieved again: block ESC so
+// it's dismissed only via Done, and wipe both the code and the QR from the DOM on close.
 tokenDialog.addEventListener('cancel', (e) => e.preventDefault());
-tokenDialog.addEventListener('close', () => { tokenValue.value = ''; });
+tokenDialog.addEventListener('close', () => { connectValue.value = ''; qrEl.innerHTML = ''; });
 
 rows.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-revoke]');

@@ -6,7 +6,7 @@
     "css": "tailwindcss -i styles/input.css -o site/assets/app.css",
     "css:watch": "tailwindcss -i styles/input.css -o site/assets/app.css --watch",
     "css:build": "tailwindcss -i styles/input.css -o site/assets/app.css --minify",
-    "vendor": "mkdir -p site/vendor && cp node_modules/hls.js/dist/hls.min.js site/vendor/hls.min.js",
+    "vendor": "mkdir -p site/vendor && cp node_modules/hls.js/dist/hls.min.js site/vendor/hls.min.js && cp node_modules/qrcode-generator/dist/qrcode.mjs site/vendor/qrcode.mjs",
     "setup": "npm run vendor && npm run css",
     "setup:prod": "npm run vendor && npm run css:build",
     "dev": "node dev-proxy.mjs",
@@ -14,10 +14,11 @@
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.1.0",
-    "tailwindcss": "^4.1.0",
-    "daisyui": "^5.0.0"
+    "daisyui": "^5.0.0",
+    "tailwindcss": "^4.1.0"
   },
   "dependencies": {
-    "hls.js": "^1.6.0"
+    "hls.js": "^1.6.0",
+    "qrcode-generator": "^2.0.4"
   }
 }
