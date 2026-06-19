@@ -26,6 +26,7 @@ let pc = null;           // active WebRTC connection, if any
 let hlsInstance = null;  // active hls.js instance, if any
 let playing = false;
 let pollTimer = null;
+let stopped = false;     // set on 403/404 — the link is dead, stop polling for good
 let clipMode = false;    // user is reviewing a recorded clip → suppress live auto-restart
 let activeSeg = null;    // segmentNumber currently playing as a clip
 let clipsKey = '';       // signature of the last-rendered clip set (avoids disruptive re-renders)
@@ -236,7 +237,8 @@ async function refresh() {
     }
   } catch (err) {
     if (err.status === 403 || err.status === 404) { // genuinely terminal — stop for good
-      clearInterval(pollTimer);
+      stopped = true;
+      clearTimeout(pollTimer);
       stopPlayback();
       document.querySelector('#player-wrap').classList.add('hidden');
       clipsWrap.classList.add('hidden');
@@ -268,12 +270,23 @@ resumeLiveBtn.addEventListener('click', () => {
   if (lastView?.status === 'RECORDING') { playing = false; startPlayback(lastView); }
 });
 
+// Adaptive poll: fast while the stream is live so a moving responder's location feels
+// real-time; slow once it has ended (retro-uploaded gap clips arrive infrequently, often
+// minutes later) to cut needless load. A self-scheduling timeout reads the latest status
+// each tick; 403/404 sets `stopped` and ends the loop.
+const POLL_LIVE_MS = 5000;
+const POLL_ENDED_MS = 25000;
+
+async function pollLoop() {
+  await refresh();
+  if (stopped) return;
+  const ended = lastView && (lastView.status === 'ENDED' || lastView.status === 'FAILED');
+  pollTimer = setTimeout(pollLoop, ended ? POLL_ENDED_MS : POLL_LIVE_MS);
+}
+
 if (!id || !t) {
   document.querySelector('#player-wrap').classList.add('hidden');
   showMessage('This watch link is incomplete.', 'error');
 } else {
-  refresh();
-  // 5 s so a moving responder's location/telemetry feels live once the phone streams
-  // periodic samples; also picks up retro-uploaded clips after the stream ends.
-  pollTimer = setInterval(refresh, 5000);
+  pollLoop();
 }
