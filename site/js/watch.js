@@ -104,6 +104,11 @@ function startHls(hlsUrl) {
   return false;
 }
 
+// Coerce anything to a finite number or null (these feed display + a CSS rotate).
+const num = (v) => { const n = typeof v === 'number' ? v : parseFloat(v); return Number.isFinite(n) ? n : null; };
+const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+const metaRow = (label, value) => `<p><span class="opacity-70">${label}:</span> ${value}</p>`;
+
 function render(view) {
   statusEl.className = `badge gap-1 ${STATUS_BADGE[view.status] ?? 'badge-ghost'}`;
   statusEl.innerHTML = `${icon(STATUS_ICON[view.status] ?? 'info', 'size-3')}<span></span>`;
@@ -111,18 +116,44 @@ function render(view) {
   ownerEl.textContent = `Streamed by ${view.ownerName} — started ${fmtDateTime(view.startedAt)}`;
 
   const s = view.latestSample;
-  // Coerce coordinates to real numbers — they feed an href, so never trust raw values.
-  const lat = s ? parseFloat(s.latitude) : NaN;
-  const lon = s ? parseFloat(s.longitude) : NaN;
-  const hasCoords = !Number.isNaN(lat) && !Number.isNaN(lon);
-  metaEl.innerHTML = `
-    <p><span class="opacity-70">Last location update:</span> ${s ? fmtDateTime(s.clientTimestamp) : '—'}</p>
-    <p><span class="opacity-70">Device:</span> ${s?.deviceInfo ? esc(s.deviceInfo) : '—'}</p>
-    <p><span class="opacity-70">Coordinates:</span> ${hasCoords ? `${lat}, ${lon}` : '—'}</p>
-    <p>${hasCoords
-      ? `<a class="link inline-flex items-center gap-1" target="_blank" rel="noopener"
-           href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}">${icon('map-pin')}Open location on map</a>`
-      : ''}</p>`;
+  const lat = num(s?.latitude), lon = num(s?.longitude);
+  const hasCoords = lat != null && lon != null;
+
+  const rows = [
+    metaRow('Last location update', s ? fmtDateTime(s.clientTimestamp) : '—'),
+    metaRow('Device', s?.deviceInfo ? esc(s.deviceInfo) : '—'),
+    metaRow('Coordinates', hasCoords ? `${lat}, ${lon}` : '—'),
+  ];
+
+  // Optional responder telemetry — render each only when the phone sent it.
+  const acc = num(s?.horizontalAccuracyM);
+  if (acc != null) rows.push(metaRow('Accuracy', `±${Math.round(acc)} m`));
+
+  const spd = num(s?.speedMps);
+  if (spd != null) rows.push(metaRow('Speed', `${(spd * 3.6).toFixed(1)} km/h`));
+
+  const brg = num(s?.bearingDeg);
+  if (brg != null) {
+    const d = ((brg % 360) + 360) % 360;
+    const arrow = `<span class="inline-block" style="transform:rotate(${d}deg)">${icon('navigation', 'size-3')}</span>`;
+    rows.push(metaRow('Heading', `<span class="inline-flex items-center gap-1">${arrow}${COMPASS[Math.round(d / 45) % 8]} (${Math.round(d)}°)</span>`));
+  }
+
+  const alt = num(s?.altitudeM);
+  if (alt != null) rows.push(metaRow('Altitude', `${Math.round(alt)} m`));
+
+  const bat = num(s?.batteryPercent);
+  if (bat != null) {
+    const lvl = Math.max(0, Math.min(100, Math.round(bat)));
+    rows.push(metaRow('Battery', `<span class="inline-flex items-center gap-1 ${lvl <= 20 ? 'text-error' : ''}">${icon('battery', 'size-4')}${lvl}%</span>`));
+  }
+
+  rows.push(`<p class="sm:col-span-2">${hasCoords
+    ? `<a class="link inline-flex items-center gap-1" target="_blank" rel="noopener"
+         href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}">${icon('map-pin')}Open location on map</a>`
+    : ''}</p>`);
+
+  metaEl.innerHTML = rows.join('');
 }
 
 const fmtClock = (iso) => { try { return new Date(iso).toLocaleTimeString(); } catch { return '—'; } };
@@ -170,7 +201,7 @@ function playClip(n) {
   resumeLiveBtn.classList.toggle('hidden', lastView?.status !== 'RECORDING');
 }
 
-let refreshing = false; // a poll tick can outlast the 15 s interval on slow networks
+let refreshing = false; // a poll tick can outlast the interval on slow networks
 
 async function refresh() {
   if (refreshing) return;
@@ -242,5 +273,7 @@ if (!id || !t) {
   showMessage('This watch link is incomplete.', 'error');
 } else {
   refresh();
-  pollTimer = setInterval(refresh, 15000); // keep status + location fresh
+  // 5 s so a moving responder's location/telemetry feels live once the phone streams
+  // periodic samples; also picks up retro-uploaded clips after the stream ends.
+  pollTimer = setInterval(refresh, 5000);
 }
