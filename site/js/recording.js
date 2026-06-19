@@ -19,8 +19,9 @@ let currentWatchUrl = null; // the shareable public watch URL (for the copy butt
 
 async function load() {
   try {
-    const { recording, segments, recentSamples, watchUrl, viewRevoked } = await api.get(`/api/v1/recordings/${id}`);
+    const { recording, segments, recentSamples, watchUrl } = await api.get(`/api/v1/recordings/${id}`);
     currentWatchUrl = watchUrl || null;
+    const viewRevoked = recording.viewRevoked; // lives on the recording object, not top-level
 
     // Watch-link controls. The link is a capability URL (anyone holding it can view).
     // Owner can open it ("Watch live", routed via our own origin so it works in dev too),
