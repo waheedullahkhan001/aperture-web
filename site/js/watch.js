@@ -36,11 +36,29 @@ let prevStatus = null;   // to detect status transitions (e.g. RECORDING → END
 let recordedTried = false; // loaded the ENDED recorded timeline once
 let hasTimeline = false; // ENDED recording has continuous streamed footage to scrub
 let currentSpan = null;  // the recorded span loaded (for the "Full recording" button)
+let playheadBaseMs = null; // wall-clock ms of the current VOD source's start (null for live)
 
 const clipsWrap = document.querySelector('#clips-wrap');
 const clipsEl = document.querySelector('#clips');
 const resumeLiveBtn = document.querySelector('#resume-live');
 const playerNote = document.querySelector('#player-note');
+const playheadEl = document.querySelector('#playhead');
+
+// Show the real-world time at the current playback position (footage start + offset), so a
+// responder knows WHEN they're looking at. Only for recorded/clip playback — live is ~now.
+function updatePlayhead() {
+  if (playheadBaseMs == null || !Number.isFinite(player.currentTime)) { playheadEl.classList.add('hidden'); return; }
+  playheadEl.textContent = `Footage time: ${new Date(playheadBaseMs + player.currentTime * 1000).toLocaleTimeString()}`;
+  playheadEl.classList.remove('hidden');
+}
+player.addEventListener('timeupdate', updatePlayhead);
+player.addEventListener('error', () => {
+  // Direct-src (clip/recorded) load/decode failure — hls.js handles its own live errors,
+  // and stopPlayback() clears src so its spurious error is ignored via the src guard.
+  if (playheadBaseMs != null && player.getAttribute('src')) {
+    showMessage('This recorded video could not be played.', 'error');
+  }
+});
 
 function showMessage(text, type = 'info') {
   messageEl.innerHTML = `<div class="alert alert-${type}">${icon(MSG_ICON[type] ?? 'info', 'size-5 shrink-0')}<span>${esc(text)}</span></div>`;
@@ -51,7 +69,9 @@ function stopPlayback() {
   hlsInstance = null;
   player.srcObject = null;
   player.removeAttribute('src');
-  playing = false; // lets the next poll start playback again
+  playing = false;        // lets the next poll start playback again
+  playheadBaseMs = null;  // no VOD source → hide the footage-time readout
+  playheadEl.classList.add('hidden');
 }
 
 // The watch endpoint returns ABSOLUTE stream URLs (e.g. http://localhost/aperture/<id>/…).
@@ -66,6 +86,7 @@ function sameOriginPath(url) {
 
 function startPlayback(view) {
   if (playing) return;
+  playheadBaseMs = null; // live has no fixed footage time
   // HLS only — same-origin so the hlsSession cookie flows; MediaMTX builds the muxer on
   // demand and the playlist carries the AAC audio track. (WHEP intentionally not used; see
   // the import note.) hls.js' fatal-error handler resets `playing` so the poll retries.
@@ -78,10 +99,15 @@ function startHls(hlsUrl) {
   try {
     if (player.canPlayType('application/vnd.apple.mpegurl')) { // Safari plays HLS natively
       player.src = hlsUrl;
+      player.play().catch(() => {}); // autoplay attr is unreliable for a JS-set source
       return true;
     }
     if (window.Hls?.isSupported()) {
       hlsInstance = new Hls({ lowLatencyMode: true, liveSyncDurationCount: 3 }); // hug the live edge
+      // CRITICAL: with a programmatically-attached source the <video autoplay> attribute does
+      // NOT reliably start playback — must call play() once the manifest is parsed. This was
+      // the "needs a refresh to play" bug (a refresh just happened to win the timing race).
+      hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => player.play().catch(() => {}));
       hlsInstance.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) {
           stopPlayback();
@@ -183,6 +209,7 @@ function loadRecordedSpan(span) {
   clipsEl.querySelectorAll('.btn-active').forEach((b) => b.classList.remove('btn-active'));
   playerNote.classList.add('hidden');
   player.muted = false;
+  playheadBaseMs = Date.parse(span.start); // footage-time readout base
   player.src = playbackUrl(span.start, span.duration);
   player.load();
   player.play().catch(() => {}); // autoplay may be blocked — controls are there
@@ -233,6 +260,7 @@ function playClip(n) {
   stopPlayback();
   playerNote.classList.add('hidden');
   player.muted = false; // user-initiated playback → sound on
+  playheadBaseMs = Date.parse(seg.startTime); // footage-time readout base
   player.src = seg.source === 'UPLOADED'
     ? `${API_BASE}/api/public/watch/${id}/segments/${encodeURIComponent(n)}?t=${encodeURIComponent(t)}`
     : playbackUrl(seg.startTime, durationSecs(seg.startTime, seg.endTime));
