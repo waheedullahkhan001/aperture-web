@@ -41,22 +41,35 @@ const clipsEl = document.querySelector('#clips');
 const resumeLiveBtn = document.querySelector('#resume-live');
 const playerNote = document.querySelector('#player-note');
 const playheadEl = document.querySelector('#playhead');
+const metaContextEl = document.querySelector('#meta-context');
+const metaNoteEl = document.querySelector('#meta-note');
 
 // Show the real-world time the on-screen footage was captured, so a responder knows WHEN
 // they're looking at. Clips: known start + playback offset. Live: the current frame's
 // program-date-time from hls.js (falls back to ~now if the playlist carries no PDT).
 function updatePlayhead() {
   let wall = null;
+  let prefix = 'Footage time';
   if (playheadBaseMs != null && Number.isFinite(player.currentTime)) {
     wall = playheadBaseMs + player.currentTime * 1000;
   } else if (isLive) {
     wall = hlsInstance?.playingDate?.getTime() ?? Date.now();
+    prefix = 'Live';
   }
   if (wall == null) { playheadEl.classList.add('hidden'); return; }
-  playheadEl.textContent = `Footage time: ${new Date(wall).toLocaleTimeString()}`;
+  playheadEl.textContent = `${prefix}: ${new Date(wall).toLocaleTimeString()}`;
   playheadEl.classList.remove('hidden');
 }
-player.addEventListener('timeupdate', updatePlayhead);
+
+// While a clip plays, keep the telemetry panel in sync with the playback position (so the
+// location shown is the location AT that moment). Throttled to once per wall-clock second.
+let lastMetaSec = -1;
+player.addEventListener('timeupdate', () => {
+  updatePlayhead();
+  if (!clipMode || playheadBaseMs == null) return;
+  const sec = Math.floor((playheadBaseMs + player.currentTime * 1000) / 1000);
+  if (sec !== lastMetaSec) { lastMetaSec = sec; renderMeta(); }
+});
 player.addEventListener('error', () => {
   // Direct-src (clip/recorded) load/decode failure — hls.js handles its own live errors,
   // and stopPlayback() clears src so its spurious error is ignored via the src guard.
@@ -139,46 +152,84 @@ function render(view) {
   statusEl.innerHTML = `${icon(STATUS_ICON[view.status] ?? 'info', 'size-3')}<span></span>`;
   statusEl.querySelector('span').textContent = view.status;
   ownerEl.textContent = `Streamed by ${view.ownerName} — started ${fmtDateTime(view.startedAt)}`;
+}
 
-  const s = view.latestSample;
+// Render the telemetry rows for ONE sample (dashes where there's no reading).
+function renderSampleRows(s) {
   const lat = num(s?.latitude), lon = num(s?.longitude);
   const hasCoords = lat != null && lon != null;
-
   const rows = [
-    metaRow('Last location update', s ? fmtDateTime(s.clientTimestamp) : '—'),
     metaRow('Device', s?.deviceInfo ? esc(s.deviceInfo) : '—'),
     metaRow('Coordinates', hasCoords ? `${lat}, ${lon}` : '—'),
   ];
-
-  // Optional responder telemetry — render each only when the phone sent it.
   const acc = num(s?.horizontalAccuracyM);
   if (acc != null) rows.push(metaRow('Accuracy', `±${Math.round(acc)} m`));
-
   const spd = num(s?.speedMps);
   if (spd != null) rows.push(metaRow('Speed', `${(spd * 3.6).toFixed(1)} km/h`));
-
   const brg = num(s?.bearingDeg);
   if (brg != null) {
     const d = ((brg % 360) + 360) % 360;
     const arrow = `<span class="inline-block" style="transform:rotate(${d}deg)">${icon('navigation', 'size-3')}</span>`;
     rows.push(metaRow('Heading', `<span class="inline-flex items-center gap-1">${arrow}${COMPASS[Math.round(d / 45) % 8]} (${Math.round(d)}°)</span>`));
   }
-
   const alt = num(s?.altitudeM);
   if (alt != null) rows.push(metaRow('Altitude', `${Math.round(alt)} m`));
-
   const bat = num(s?.batteryPercent);
   if (bat != null) {
     const lvl = Math.max(0, Math.min(100, Math.round(bat)));
     rows.push(metaRow('Battery', `<span class="inline-flex items-center gap-1 ${lvl <= 20 ? 'text-error' : ''}">${icon('battery', 'size-4')}${lvl}%</span>`));
   }
-
-  rows.push(`<p class="sm:col-span-2">${hasCoords
-    ? `<a class="link inline-flex items-center gap-1" target="_blank" rel="noopener"
-         href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}">${icon('map-pin')}Open location on map</a>`
-    : ''}</p>`);
-
+  if (hasCoords) {
+    rows.push(`<p class="sm:col-span-2"><a class="link inline-flex items-center gap-1" target="_blank" rel="noopener"
+      href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}">${icon('map-pin')}Open location on map</a></p>`);
+  }
   metaEl.innerHTML = rows.join('');
+}
+
+// Most recent sample at or before a wall-clock time — historical lookup for clip playback.
+function sampleAt(view, atMs) {
+  const arr = Array.isArray(view.samples) ? view.samples : [];
+  let chosen = null, chosenTs = -Infinity;
+  for (const s of arr) {
+    const ts = Date.parse(s.clientTimestamp);
+    if (ts <= atMs && ts > chosenTs) { chosen = s; chosenTs = ts; }
+  }
+  return chosen;
+}
+
+// Choose WHICH telemetry sample to show and label its time context in clear words: the live
+// reading during a live stream, or the reading from the moment you're viewing inside a clip.
+function renderMeta() {
+  const view = lastView;
+  if (!view) return;
+  const hasHistory = Array.isArray(view.samples) && view.samples.length > 0;
+  let sample, label, note = '', tone = 'badge-ghost';
+
+  if (clipMode && playheadBaseMs != null) {
+    const atMs = playheadBaseMs + (Number.isFinite(player.currentTime) ? player.currentTime * 1000 : 0);
+    label = `Recorded · ${new Date(atMs).toLocaleTimeString()}`;
+    if (hasHistory) {
+      sample = sampleAt(view, atMs);
+      note = sample ? 'Location and telemetry as they were at this point in the recording.'
+                    : 'No telemetry was recorded at this moment.';
+    } else {
+      sample = view.latestSample; // interim: public API exposes only the latest reading
+      note = 'Showing the latest known reading — moment-by-moment telemetry for past clips isn’t available yet.';
+    }
+  } else if (isLive) {
+    sample = view.latestSample;
+    tone = 'badge-info';
+    label = sample ? `Live · updated ${new Date(Date.parse(sample.clientTimestamp)).toLocaleTimeString()}` : 'Live';
+  } else {
+    sample = view.latestSample;
+    label = sample ? `Last known · ${new Date(Date.parse(sample.clientTimestamp)).toLocaleTimeString()}` : 'No telemetry yet';
+  }
+
+  metaContextEl.className = `badge badge-sm ${tone}`;
+  metaContextEl.textContent = label;
+  metaNoteEl.classList.toggle('hidden', !note);
+  if (note) metaNoteEl.textContent = note;
+  renderSampleRows(sample);
 }
 
 const fmtClock = (iso) => { try { return new Date(iso).toLocaleTimeString(); } catch { return '—'; } };
@@ -207,11 +258,12 @@ function renderClips(view) {
   if (key === clipsKey) return;
   clipsKey = key;
   clipsWrap.classList.remove('hidden');
-  clipsEl.innerHTML = segs.map((s) => {
+  clipsEl.innerHTML = segs.map((s, i) => {
     const up = s.source === 'UPLOADED';
     const dur = fmtDuration(s.startTime, s.endTime);
     return `<li><button type="button" data-seg="${esc(String(s.segmentNumber))}"
       class="btn btn-sm btn-block justify-start gap-2 ${s.segmentNumber === activeSeg ? 'btn-active' : ''}">
+      <span class="font-mono text-xs opacity-50 w-5 text-right shrink-0">${i + 1}</span>
       ${icon(up ? 'upload' : 'film', 'size-4')}
       <span class="font-mono text-xs">${esc(fmtClock(s.startTime))} – ${esc(fmtClock(s.endTime))}</span>
       ${dur ? `<span class="opacity-60 text-xs">${dur}</span>` : ''}
@@ -236,6 +288,8 @@ function playClip(n) {
   player.play().catch(() => {});
   clipsEl.querySelectorAll('[data-seg]').forEach((b) => b.classList.toggle('btn-active', b.dataset.seg === String(n)));
   showReturnButton(lastView?.status === 'RECORDING'); // offer "Resume live" during a recording
+  lastMetaSec = -1;
+  renderMeta(); // telemetry for this clip's start moment, immediately
 }
 
 // When a clip ends, auto-advance to the next one (chronological) for a continuous watch.
@@ -284,6 +338,7 @@ async function refresh() {
         showMessage(n ? `Recording failed — ${n} clip${n > 1 ? 's' : ''} below to review.` : 'This recording failed before completing.', 'warning');
       }
     }
+    renderMeta(); // keep the telemetry panel + its time-context label current
   } catch (err) {
     if (err.status === 403 || err.status === 404) { // genuinely terminal — stop for good
       stopped = true;
@@ -317,6 +372,7 @@ resumeLiveBtn.addEventListener('click', () => {
   stopPlayback();
   player.muted = true; // re-mute so autoplay is allowed when live resumes
   if (lastView?.status === 'RECORDING') startPlayback(lastView);
+  renderMeta(); // back to live/last-known telemetry
 });
 
 // Adaptive poll: fast while the stream is live so a moving responder's location feels

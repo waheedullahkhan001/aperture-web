@@ -28,15 +28,26 @@
         <p id="playhead" class="text-xs opacity-70 mt-1 hidden"></p>
       </div>
 
+      <div id="message" class="mt-2"></div>
+
       <button id="resume-live" type="button" class="btn btn-sm btn-error gap-1 mt-2 hidden" data-icon="radio">Resume live</button>
 
-      <div id="clips-wrap" class="mt-3 hidden">
-        <h2 class="text-sm font-semibold opacity-70 mb-2 flex items-center gap-1" data-icon="film" data-icon-size="size-4">Clips</h2>
-        <ul id="clips" class="flex flex-col gap-1"></ul>
+      <div id="clips-wrap" class="mt-4 hidden">
+        <div class="flex items-baseline justify-between gap-2">
+          <h2 class="text-sm font-semibold opacity-70 flex items-center gap-1" data-icon="film" data-icon-size="size-4">Clips</h2>
+          <span class="text-xs opacity-60">Oldest first · tap to watch</span>
+        </div>
+        <ul id="clips" class="flex flex-col gap-1 mt-2"></ul>
       </div>
 
-      <div id="meta" class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1 text-sm mt-2"></div>
-      <div id="message" class="mt-2"></div>
+      <div class="mt-4">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <h2 class="text-sm font-semibold opacity-70 flex items-center gap-1" data-icon="map-pin" data-icon-size="size-4">Location &amp; telemetry</h2>
+          <span id="meta-context" class="badge badge-sm badge-ghost"></span>
+        </div>
+        <p id="meta-note" class="text-xs opacity-60 mt-1 hidden"></p>
+        <div id="meta" class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1 text-sm mt-2"></div>
+      </div>
     </div>
   </div>
   <script type="module" src="/js/watch.js"></script>
