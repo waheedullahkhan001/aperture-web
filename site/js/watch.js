@@ -34,6 +34,7 @@ let clipsKey = '';       // signature of the last-rendered clip set (avoids disr
 let lastView = null;     // most recent watch payload (used by the resume-live button)
 let endedHandled = false; // showed the "stream ended" message once
 let playheadBaseMs = null; // wall-clock ms of the current clip's start (null for live)
+let isLive = false;        // live HLS is the current source (drives the live footage-time)
 
 const clipsWrap = document.querySelector('#clips-wrap');
 const clipsEl = document.querySelector('#clips');
@@ -41,11 +42,18 @@ const resumeLiveBtn = document.querySelector('#resume-live');
 const playerNote = document.querySelector('#player-note');
 const playheadEl = document.querySelector('#playhead');
 
-// Show the real-world time at the current playback position (footage start + offset), so a
-// responder knows WHEN they're looking at. Only for recorded/clip playback — live is ~now.
+// Show the real-world time the on-screen footage was captured, so a responder knows WHEN
+// they're looking at. Clips: known start + playback offset. Live: the current frame's
+// program-date-time from hls.js (falls back to ~now if the playlist carries no PDT).
 function updatePlayhead() {
-  if (playheadBaseMs == null || !Number.isFinite(player.currentTime)) { playheadEl.classList.add('hidden'); return; }
-  playheadEl.textContent = `Footage time: ${new Date(playheadBaseMs + player.currentTime * 1000).toLocaleTimeString()}`;
+  let wall = null;
+  if (playheadBaseMs != null && Number.isFinite(player.currentTime)) {
+    wall = playheadBaseMs + player.currentTime * 1000;
+  } else if (isLive) {
+    wall = hlsInstance?.playingDate?.getTime() ?? Date.now();
+  }
+  if (wall == null) { playheadEl.classList.add('hidden'); return; }
+  playheadEl.textContent = `Footage time: ${new Date(wall).toLocaleTimeString()}`;
   playheadEl.classList.remove('hidden');
 }
 player.addEventListener('timeupdate', updatePlayhead);
@@ -67,7 +75,8 @@ function stopPlayback() {
   player.srcObject = null;
   player.removeAttribute('src');
   playing = false;        // lets the next poll start playback again
-  playheadBaseMs = null;  // no VOD source → hide the footage-time readout
+  isLive = false;
+  playheadBaseMs = null;  // no source → hide the footage-time readout
   playheadEl.classList.add('hidden');
 }
 
@@ -88,6 +97,7 @@ function startPlayback(view) {
   // demand and the playlist carries the AAC audio track. (WHEP intentionally not used; see
   // the import note.) hls.js' fatal-error handler resets `playing` so the poll retries.
   playing = startHls(sameOriginPath(view.hlsUrl));
+  isLive = playing; // live source active → footage-time tracks the live frame's capture time
   if (!playing) showMessage('Live video could not be loaded. The stream may be unreachable from your network.', 'warning');
 }
 
