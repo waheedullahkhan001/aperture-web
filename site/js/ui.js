@@ -70,6 +70,7 @@ export function fmtBytes(bytes) {
 export const STATUS_BADGE = {
   PENDING: 'badge-warning',
   RECORDING: 'badge-error animate-pulse',
+  INTERRUPTED: 'badge-warning animate-pulse', // recoverable drop — not over, reconnecting
   ENDED: 'badge-ghost',
   FAILED: 'badge-error badge-outline',
 };
@@ -78,6 +79,7 @@ export const STATUS_BADGE = {
 export const STATUS_ICON = {
   PENDING: 'clock',
   RECORDING: 'radio',
+  INTERRUPTED: 'triangle-alert',
   ENDED: 'circle-check',
   FAILED: 'circle-x',
 };

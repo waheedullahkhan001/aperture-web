@@ -33,7 +33,8 @@ async function load() {
       linkControls = `<span class="badge badge-ghost gap-1">${icon('ban', 'size-3')}Watch link revoked</span>`;
     } else if (watchUrl) {
       const t = new URL(watchUrl).searchParams.get('t');
-      const live = (recording.status === 'PENDING' || recording.status === 'RECORDING') && t
+      const liveish = recording.status === 'PENDING' || recording.status === 'RECORDING' || recording.status === 'INTERRUPTED';
+      const live = liveish && t
         ? `<a class="btn btn-sm btn-error gap-1" target="_blank" rel="noopener"
              href="watch.html?id=${encodeURIComponent(recording.id)}&t=${encodeURIComponent(t)}">${icon('play')}Watch live</a>`
         : '';

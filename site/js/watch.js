@@ -363,7 +363,16 @@ async function refresh() {
       playerNote.classList.remove('hidden');
       showReturnButton(false);
       showMessage('Waiting for the stream to start…');
-    } else if (!endedHandled) { // ENDED or FAILED — pure clips model, no live player
+    } else if (view.status === 'INTERRUPTED') {
+      // Recoverable network drop — the recording is NOT over and may resume any moment.
+      // Tear down the dead live player, show a reconnecting banner, keep clips + polling,
+      // and never trip endedHandled. Live resumes on the next flip back to RECORDING
+      // (startPlayback re-runs because stopPlayback cleared `playing`).
+      stopPlayback();
+      playerNote.classList.add('hidden');
+      showReturnButton(false);
+      showMessage('Connection lost — reconnecting… Live video resumes automatically when the device is back online.', 'warning');
+    } else if (!endedHandled) { // ENDED or FAILED — terminal, pure clips model, no live player
       endedHandled = true;
       stopPlayback();
       playerNote.classList.add('hidden');
