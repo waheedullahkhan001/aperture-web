@@ -35,6 +35,9 @@ let lastView = null;     // most recent watch payload (used by the resume-live b
 let endedHandled = false; // showed the "stream ended" message once
 let playheadBaseMs = null; // wall-clock ms of the current clip's start (null for live)
 let isLive = false;        // live HLS is the current source (drives the live footage-time)
+let wantPlay = false;      // we intend to autoplay the current source — retry until it starts
+let liveKicks = 0;         // cold-start restarts attempted for a stuck live stream
+let watchdog = null;       // timer that restarts a live stream still stuck at 0:00
 
 const clipsWrap = document.querySelector('#clips-wrap');
 const clipsEl = document.querySelector('#clips');
@@ -70,6 +73,17 @@ player.addEventListener('timeupdate', () => {
   const sec = Math.floor((playheadBaseMs + player.currentTime * 1000) / 1000);
   if (sec !== lastMetaSec) { lastMetaSec = sec; renderMeta(); }
 });
+
+// Robust autoplay: a source becomes playable via different events depending on codec path
+// and how warm the muxer is. Keep trying play() until it actually starts; once it does (or
+// the user pauses) stop forcing it, so we never override a deliberate pause.
+function attemptPlay() {
+  if (!wantPlay) return;
+  player.play().then(() => { wantPlay = false; }).catch(() => { /* retry on the next event */ });
+}
+player.addEventListener('canplay', attemptPlay);
+player.addEventListener('loadeddata', attemptPlay);
+player.addEventListener('playing', () => { wantPlay = false; liveKicks = 0; clearWatchdog(); });
 player.addEventListener('error', () => {
   // Direct-src (clip/recorded) load/decode failure — hls.js handles its own live errors,
   // and stopPlayback() clears src so its spurious error is ignored via the src guard.
@@ -83,14 +97,35 @@ function showMessage(text, type = 'info') {
 }
 
 function stopPlayback() {
+  clearWatchdog();
   hlsInstance?.destroy();
   hlsInstance = null;
   player.srcObject = null;
   player.removeAttribute('src');
   playing = false;        // lets the next poll start playback again
   isLive = false;
+  wantPlay = false;
   playheadBaseMs = null;  // no source → hide the footage-time readout
   playheadEl.classList.add('hidden');
+}
+
+function clearWatchdog() { clearTimeout(watchdog); watchdog = null; }
+
+// Cold-start guard: MediaMTX builds the HLS muxer on first request, so the very first
+// attempt can attach but never buffer (stuck at 0:00) — which is exactly the "had to
+// refresh" bug. If live hasn't actually started after a few seconds, restart it ourselves
+// (what a manual refresh does), escalating to standard HLS for reliability over latency.
+function armWatchdog() {
+  clearWatchdog();
+  watchdog = setTimeout(() => {
+    if (!isLive) return;
+    if (!player.paused && player.currentTime > 0) { liveKicks = 0; return; } // healthy
+    if (liveKicks >= 2) { showMessage('Live video is taking longer than usual to start…', 'warning'); return; }
+    liveKicks += 1;
+    const v = lastView;
+    stopPlayback();
+    if (v?.status === 'RECORDING') startPlayback(v, false); // retry without low-latency mode
+  }, 6000);
 }
 
 // The watch endpoint returns ABSOLUTE stream URLs (e.g. http://localhost/aperture/<id>/…).
@@ -103,31 +138,32 @@ function sameOriginPath(url) {
   catch { return url; }
 }
 
-function startPlayback(view) {
+function startPlayback(view, lowLatency = true) {
   if (playing) return;
   playheadBaseMs = null; // live has no fixed footage time
   // HLS only — same-origin so the hlsSession cookie flows; MediaMTX builds the muxer on
   // demand and the playlist carries the AAC audio track. (WHEP intentionally not used; see
-  // the import note.) hls.js' fatal-error handler resets `playing` so the poll retries.
-  playing = startHls(sameOriginPath(view.hlsUrl));
+  // the import note.)
+  playing = startHls(sameOriginPath(view.hlsUrl), lowLatency);
   isLive = playing; // live source active → footage-time tracks the live frame's capture time
-  if (!playing) showMessage('Live video could not be loaded. The stream may be unreachable from your network.', 'warning');
+  if (playing) armWatchdog(); // recover a cold-muxer stall without a manual refresh
+  else showMessage('Live video could not be loaded. The stream may be unreachable from your network.', 'warning');
 }
 
-function startHls(hlsUrl) {
+function startHls(hlsUrl, lowLatency = true) {
   if (!hlsUrl) return false;
+  wantPlay = true; // keep retrying play() until it actually starts
   try {
     if (player.canPlayType('application/vnd.apple.mpegurl')) { // Safari plays HLS natively
       player.src = hlsUrl;
-      player.play().catch(() => {}); // autoplay attr is unreliable for a JS-set source
+      attemptPlay();
       return true;
     }
     if (window.Hls?.isSupported()) {
-      hlsInstance = new Hls({ lowLatencyMode: true, liveSyncDurationCount: 3 }); // hug the live edge
-      // CRITICAL: with a programmatically-attached source the <video autoplay> attribute does
-      // NOT reliably start playback — must call play() once the manifest is parsed. This was
-      // the "needs a refresh to play" bug (a refresh just happened to win the timing race).
-      hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => player.play().catch(() => {}));
+      // Low-latency hugs the live edge but is fragile on a cold muxer; the watchdog falls
+      // back to standard HLS (lowLatency=false) if the first attempt stalls.
+      hlsInstance = new Hls({ lowLatencyMode: lowLatency, liveSyncDurationCount: lowLatency ? 3 : 6 });
+      hlsInstance.on(Hls.Events.MANIFEST_PARSED, attemptPlay);
       hlsInstance.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) {
           stopPlayback();
@@ -285,7 +321,8 @@ function playClip(n) {
   player.muted = false; // user-initiated playback → sound on
   playheadBaseMs = Date.parse(seg.startTime); // footage-time readout base
   player.src = `${API_BASE}/api/public/watch/${id}/segments/${encodeURIComponent(n)}?t=${encodeURIComponent(t)}`;
-  player.play().catch(() => {});
+  wantPlay = true;
+  attemptPlay();
   clipsEl.querySelectorAll('[data-seg]').forEach((b) => b.classList.toggle('btn-active', b.dataset.seg === String(n)));
   showReturnButton(lastView?.status === 'RECORDING'); // offer "Resume live" during a recording
   lastMetaSec = -1;
