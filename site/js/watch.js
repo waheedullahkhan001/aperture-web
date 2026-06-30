@@ -20,6 +20,7 @@ function params() {
 const { id, t } = params();
 const statusEl = document.querySelector('#status');
 const ownerEl = document.querySelector('#owner');
+const deviceEl = document.querySelector('#device');
 const metaEl = document.querySelector('#meta');
 const messageEl = document.querySelector('#message');
 const player = document.querySelector('#player');
@@ -188,6 +189,15 @@ function render(view) {
   statusEl.innerHTML = `${icon(STATUS_ICON[view.status] ?? 'info', 'size-3')}<span></span>`;
   statusEl.querySelector('span').textContent = view.status;
   ownerEl.textContent = `Streamed by ${view.ownerName} — started ${fmtDateTime(view.startedAt)}`;
+
+  // The paired device's user-given name (often holds the IMEI, since pairing prompts for it).
+  // Distinct from the phone's self-reported model in the telemetry block. Hidden if absent.
+  if (view.deviceName) {
+    deviceEl.innerHTML = `<span class="inline-flex items-center gap-1">${icon('smartphone', 'size-3')}Device: ${esc(view.deviceName)}</span>`;
+    deviceEl.classList.remove('hidden');
+  } else {
+    deviceEl.classList.add('hidden');
+  }
 }
 
 // Render the telemetry rows for ONE sample (dashes where there's no reading).
@@ -195,7 +205,7 @@ function renderSampleRows(s) {
   const lat = num(s?.latitude), lon = num(s?.longitude);
   const hasCoords = lat != null && lon != null;
   const rows = [
-    metaRow('Device', s?.deviceInfo ? esc(s.deviceInfo) : '—'),
+    metaRow('Phone model', s?.deviceInfo ? esc(s.deviceInfo) : '—'),
     metaRow('Coordinates', hasCoords ? `${lat}, ${lon}` : '—'),
   ];
   const acc = num(s?.horizontalAccuracyM);
