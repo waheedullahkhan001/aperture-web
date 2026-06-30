@@ -14,9 +14,9 @@
 </head>
 <body class="min-h-screen bg-base-200 flex items-start justify-center p-4">
   <div class="card bg-base-100 shadow-xl w-full max-w-3xl mt-6">
-    <div class="card-body">
-      <div class="flex items-center gap-3 flex-wrap">
-        <h1 class="card-title text-2xl">Aperture emergency stream</h1>
+    <div class="card-body p-4 sm:p-6">
+      <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+        <h1 class="card-title text-xl sm:text-2xl">Aperture emergency stream</h1>
         <span id="status" class="badge badge-ghost">loading…</span>
       </div>
       <p id="owner" class="text-sm opacity-70"></p>
@@ -34,7 +34,7 @@
       <button id="resume-live" type="button" class="btn btn-sm btn-error gap-1 mt-2 hidden" data-icon="radio">Resume live</button>
 
       <div id="clips-wrap" class="mt-4 hidden">
-        <div class="flex items-baseline justify-between gap-2">
+        <div class="flex items-baseline justify-between gap-2 flex-wrap">
           <h2 class="text-sm font-semibold opacity-70 flex items-center gap-1" data-icon="film" data-icon-size="size-4">Clips</h2>
           <span class="text-xs opacity-60">Oldest first · tap to watch</span>
         </div>

@@ -193,7 +193,7 @@ function render(view) {
   // The paired device's user-given name (often holds the IMEI, since pairing prompts for it).
   // Distinct from the phone's self-reported model in the telemetry block. Hidden if absent.
   if (view.deviceName) {
-    deviceEl.innerHTML = `<span class="inline-flex items-center gap-1">${icon('smartphone', 'size-3')}Device: ${esc(view.deviceName)}</span>`;
+    deviceEl.innerHTML = `${icon('smartphone', 'size-4 inline-block align-text-bottom mr-1')}Device: ${esc(view.deviceName)}`;
     deviceEl.classList.remove('hidden');
   } else {
     deviceEl.classList.add('hidden');
@@ -308,12 +308,12 @@ function renderClips(view) {
     const up = s.source === 'UPLOADED';
     const dur = fmtDuration(s.startTime, s.endTime);
     return `<li><button type="button" data-seg="${esc(String(s.segmentNumber))}"
-      class="btn btn-sm btn-block justify-start gap-2 ${s.segmentNumber === activeSeg ? 'btn-active' : ''}">
+      class="btn btn-sm btn-block h-auto min-h-8 py-1.5 flex-wrap justify-start gap-x-2 gap-y-1 ${s.segmentNumber === activeSeg ? 'btn-active' : ''}">
       <span class="font-mono text-xs opacity-50 w-5 text-right shrink-0">${i + 1}</span>
-      ${icon(up ? 'upload' : 'film', 'size-4')}
-      <span class="font-mono text-xs">${esc(fmtClock(s.startTime))} – ${esc(fmtClock(s.endTime))}</span>
-      ${dur ? `<span class="opacity-60 text-xs">${dur}</span>` : ''}
-      <span class="badge badge-xs ml-auto ${up ? 'badge-ghost' : 'badge-info'}">${up ? 'uploaded' : 'live'}</span>
+      ${icon(up ? 'upload' : 'film', 'size-4 shrink-0')}
+      <span class="font-mono text-xs whitespace-nowrap">${esc(fmtClock(s.startTime))} – ${esc(fmtClock(s.endTime))}</span>
+      ${dur ? `<span class="opacity-60 text-xs shrink-0">${dur}</span>` : ''}
+      <span class="badge badge-xs ml-auto shrink-0 ${up ? 'badge-ghost' : 'badge-info'}">${up ? 'uploaded' : 'live'}</span>
     </button></li>`;
   }).join('');
 }
